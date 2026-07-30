@@ -95,3 +95,12 @@ export const auditLogs = sqliteTable("audit_logs", {
   detail: text("detail"), // JSON string
   timestamp: text("timestamp").default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const scannerSessions = sqliteTable("scanner_sessions", {
+  sessionId: text("session_id").primaryKey(),
+  shopId: integer("shop_id").notNull(),
+  paired: integer("paired", { mode: "boolean" }).default(false).notNull(),
+  lastScannedBarcode: text("last_scanned_barcode"),
+  lastScannedTime: integer("last_scanned_time").default(0).notNull(),
+  createdAt: integer("created_at").notNull(),
+});

@@ -13,10 +13,11 @@ export async function POST(req: Request) {
   }
 
   const shopId = session.user.shopId;
-  const scannerSession = createScannerSession(shopId);
+  const scannerSession = await createScannerSession(shopId);
 
-  const origin = req.headers.get("origin") || req.headers.get("host") || "";
-  const host = origin.startsWith("http") ? origin : `http://${origin}`;
+  const rawHost = req.headers.get("x-forwarded-host") || req.headers.get("host") || "";
+  const rawProto = req.headers.get("x-forwarded-proto") || (rawHost.includes("localhost") ? "http" : "https");
+  const host = rawHost.startsWith("http") ? rawHost : `${rawProto}://${rawHost}`;
   const remoteUrl = `${host}/remote-scan?session=${scannerSession.sessionId}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
     remoteUrl
@@ -45,7 +46,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Session ID is required" }, { status: 400 });
   }
 
-  const scannerSession = getScannerSession(sessionId);
+  const scannerSession = await getScannerSession(sessionId);
 
   if (!scannerSession) {
     return NextResponse.json({ error: "Scanner session expired or invalid" }, { status: 404 });

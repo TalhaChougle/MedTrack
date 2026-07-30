@@ -1,4 +1,7 @@
-// In-memory store for pairing store smartphone cameras to desktop POS sessions
+import { db } from "@/lib/db";
+import { scannerSessions } from "@/lib/db/schema";
+import { eq, lt } from "drizzle-orm";
+import { initDatabase } from "@/lib/db/init";
 
 export interface ScannerSession {
   sessionId: string;
@@ -9,62 +12,105 @@ export interface ScannerSession {
   paired: boolean;
 }
 
-// Global store map surviving Next.js hot reloads in dev mode
-const globalForScanner = globalThis as unknown as {
-  scannerSessions: Map<string, ScannerSession>;
-};
+export async function createScannerSession(shopId: number): Promise<ScannerSession> {
+  try {
+    await initDatabase();
+  } catch (e) {}
 
-export const sessions =
-  globalForScanner.scannerSessions || new Map<string, ScannerSession>();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForScanner.scannerSessions = sessions;
-}
-
-export function createScannerSession(shopId: number): ScannerSession {
   const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
-  const session: ScannerSession = {
+  const now = Date.now();
+
+  const newSession: ScannerSession = {
     sessionId,
     shopId,
-    createdAt: Date.now(),
+    createdAt: now,
     lastScannedBarcode: null,
     lastScannedTime: 0,
     paired: false,
   };
 
-  sessions.set(sessionId, session);
+  try {
+    await db.insert(scannerSessions).values({
+      sessionId,
+      shopId,
+      paired: false,
+      lastScannedBarcode: null,
+      lastScannedTime: 0,
+      createdAt: now,
+    });
 
-  // Auto-cleanup sessions older than 30 minutes
-  const thirtyMinsAgo = Date.now() - 30 * 60 * 1000;
-  for (const [id, sess] of sessions.entries()) {
-    if (sess.createdAt < thirtyMinsAgo) {
-      sessions.delete(id);
-    }
+    // Cleanup sessions older than 30 minutes
+    const thirtyMinsAgo = now - 30 * 60 * 1000;
+    await db.delete(scannerSessions).where(lt(scannerSessions.createdAt, thirtyMinsAgo)).catch(() => {});
+  } catch (e) {
+    console.error("createScannerSession DB error:", e);
   }
 
-  return session;
+  return newSession;
 }
 
-export function getScannerSession(sessionId: string): ScannerSession | null {
-  return sessions.get(sessionId) || null;
+export async function getScannerSession(sessionId: string): Promise<ScannerSession | null> {
+  try {
+    await initDatabase();
+  } catch (e) {}
+
+  try {
+    const list = await db
+      .select()
+      .from(scannerSessions)
+      .where(eq(scannerSessions.sessionId, sessionId.toUpperCase().trim()));
+
+    const s = list[0];
+    if (!s) return null;
+
+    return {
+      sessionId: s.sessionId,
+      shopId: s.shopId,
+      createdAt: s.createdAt,
+      lastScannedBarcode: s.lastScannedBarcode,
+      lastScannedTime: s.lastScannedTime,
+      paired: Boolean(s.paired),
+    };
+  } catch (e) {
+    console.error("getScannerSession DB error:", e);
+    return null;
+  }
 }
 
-export function pairScannerSession(sessionId: string): boolean {
-  const sess = sessions.get(sessionId);
-  if (sess) {
-    sess.paired = true;
+export async function pairScannerSession(sessionId: string): Promise<boolean> {
+  try {
+    await initDatabase();
+  } catch (e) {}
+
+  try {
+    await db
+      .update(scannerSessions)
+      .set({ paired: true })
+      .where(eq(scannerSessions.sessionId, sessionId.toUpperCase().trim()));
+
     return true;
+  } catch (e) {
+    return false;
   }
-  return false;
 }
 
-export function pushRemoteScan(sessionId: string, barcode: string): boolean {
-  const sess = sessions.get(sessionId);
-  if (sess) {
-    sess.lastScannedBarcode = barcode;
-    sess.lastScannedTime = Date.now();
-    sess.paired = true;
+export async function pushRemoteScan(sessionId: string, barcode: string): Promise<boolean> {
+  try {
+    await initDatabase();
+  } catch (e) {}
+
+  try {
+    await db
+      .update(scannerSessions)
+      .set({
+        lastScannedBarcode: barcode,
+        lastScannedTime: Date.now(),
+        paired: true,
+      })
+      .where(eq(scannerSessions.sessionId, sessionId.toUpperCase().trim()));
+
     return true;
+  } catch (e) {
+    return false;
   }
-  return false;
 }

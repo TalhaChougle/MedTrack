@@ -77,6 +77,14 @@ export async function initDatabase() {
         detail TEXT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
       );`,
+      `CREATE TABLE IF NOT EXISTS scanner_sessions (
+        session_id TEXT PRIMARY KEY,
+        shop_id INTEGER NOT NULL,
+        paired INTEGER NOT NULL DEFAULT 0,
+        last_scanned_barcode TEXT,
+        last_scanned_time INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );`,
       `CREATE INDEX IF NOT EXISTS idx_users_shop ON users(shop_id);`,
       `CREATE INDEX IF NOT EXISTS idx_medicines_shop ON medicines(shop_id);`,
       `CREATE INDEX IF NOT EXISTS idx_medicines_barcode ON medicines(shop_id, barcode);`,

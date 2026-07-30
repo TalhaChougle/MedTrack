@@ -11,7 +11,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Session ID is required" }, { status: 400 });
     }
 
-    const session = getScannerSession(sessionId);
+    const session = await getScannerSession(sessionId);
     if (!session) {
       return NextResponse.json(
         { error: "Pairing session not found or expired. Please rescan QR code on desktop." },
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     }
 
     if (action === "pair") {
-      pairScannerSession(sessionId);
+      await pairScannerSession(sessionId);
       return NextResponse.json({
         success: true,
         shopId: session.shopId,
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     }
 
     const cleanBarcode = barcode.trim();
-    pushRemoteScan(sessionId, cleanBarcode);
+    await pushRemoteScan(sessionId, cleanBarcode);
 
     return NextResponse.json({
       success: true,
