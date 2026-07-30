@@ -421,36 +421,63 @@ export default function BarcodeScannerModal({
 
   const lastSeenTimestampRef = useRef<number>(0);
 
-  // Poll phone pairing session for remote scans
+  // Real-time Instant SSE Stream Listener for phone pairing & remote scans
   useEffect(() => {
     if (inputSource !== "phone" || !phoneSessionId) return;
 
-    const interval = setInterval(async () => {
+    let eventSource: EventSource | null = null;
+    let fallbackInterval: any = null;
+
+    const topic = `medtrack_session_${phoneSessionId.toLowerCase()}`;
+    const sseUrl = `https://ntfy.sh/${topic}/sse`;
+
+    try {
+      eventSource = new EventSource(sseUrl);
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          const message = data.message?.trim();
+          if (!message) return;
+
+          if (message === "PAIRED") {
+            setPhonePaired(true);
+          } else if (message.length > 0) {
+            setPhonePaired(true);
+            handleBarcodeScanned(message);
+          }
+        } catch (e) {}
+      };
+    } catch (e) {}
+
+    // Backup polling loop in case SSE is blocked by local proxy
+    fallbackInterval = setInterval(async () => {
       try {
         const res = await fetch(
           `/api/scanner/session?sessionId=${phoneSessionId}&since=${lastSeenTimestampRef.current}`
         );
         if (res.ok) {
           const data = await res.json();
-          setPhonePaired(data.paired);
+          if (data.paired) setPhonePaired(true);
           if (data.newScan && data.newScan.timestamp > lastSeenTimestampRef.current) {
             lastSeenTimestampRef.current = data.newScan.timestamp;
             handleBarcodeScanned(data.newScan.barcode);
           }
         }
-      } catch (e) {
-        console.warn("Phone scan poll error:", e);
-      }
-    }, 800);
+      } catch (e) {}
+    }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      if (eventSource) eventSource.close();
+      if (fallbackInterval) clearInterval(fallbackInterval);
+    };
   }, [inputSource, phoneSessionId]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white border border-slate-200 text-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden my-8">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white border border-slate-200 text-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col my-auto">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50 shrink-0">
           <div className="flex items-center gap-3">
             <div
               className={`p-2.5 rounded-xl ${
@@ -482,7 +509,7 @@ export default function BarcodeScannerModal({
         </div>
 
         {/* Mode Switcher Tabs */}
-        <div className="grid grid-cols-2 p-2 gap-2 bg-slate-100 border-b border-slate-200">
+        <div className="grid grid-cols-2 p-2 gap-2 bg-slate-100 border-b border-slate-200 shrink-0">
           <button
             onClick={() => {
               setCheckResult(null);
@@ -515,7 +542,7 @@ export default function BarcodeScannerModal({
           </button>
         </div>
 
-        <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+        <div className="p-6 space-y-6 overflow-y-auto flex-1">
           {/* Scanner Input Device Choice Selector */}
           <div className="space-y-2">
             <label className="text-xs font-extrabold text-[#1E3A5F] uppercase tracking-wider block">
