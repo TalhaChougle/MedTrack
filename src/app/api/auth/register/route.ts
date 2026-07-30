@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { initDatabase } from "@/lib/db/init";
 import { shops, users, auditLogs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function POST(req: Request) {
   try {
+    // Automatically ensure SQLite database tables are initialized
+    try {
+      await initDatabase();
+    } catch (e) {
+      console.warn("Auto initDatabase warning:", e);
+    }
     const body = await req.json();
     const {
       shopName,

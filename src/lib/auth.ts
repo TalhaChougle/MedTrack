@@ -2,6 +2,7 @@ import { AuthOptions, getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { initDatabase } from "@/lib/db/init";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -17,6 +18,10 @@ export const authOptions: AuthOptions = {
         if (!credentials?.email || !credentials?.password) {
           throw new Error("Missing email or password");
         }
+
+        try {
+          await initDatabase();
+        } catch (e) {}
 
         const userList = await db
           .select()
