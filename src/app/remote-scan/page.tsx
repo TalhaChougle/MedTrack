@@ -58,15 +58,20 @@ function RemoteScanClient() {
     pairWithDesktop();
   }, [sessionId]);
 
+  const lastScannedRef = useRef<string>("");
+  const isSendingRef = useRef<boolean>(false);
+
   // Handle barcode scanned on phone
   const handlePhoneScan = async (code: string) => {
     const cleanCode = code.trim();
-    if (!cleanCode || !sessionId || loading) return;
+    if (!cleanCode || !sessionId || isSendingRef.current) return;
 
-    if (Date.now() - lastTimeRef.current < 1500 && lastScanned === cleanCode) {
+    if (Date.now() - lastTimeRef.current < 1200 && lastScannedRef.current === cleanCode) {
       return;
     }
     lastTimeRef.current = Date.now();
+    lastScannedRef.current = cleanCode;
+    isSendingRef.current = true;
 
     // Haptic feedback vibration on phone
     if (typeof window !== "undefined" && "vibrate" in navigator) {
@@ -88,6 +93,9 @@ function RemoteScanClient() {
       const data = await res.json();
       if (res.ok) {
         setLastScanned(cleanCode);
+        setTimeout(() => {
+          setLastScanned((curr) => (curr === cleanCode ? null : curr));
+        }, 2500);
       } else {
         setErrorMsg(data.error || "Failed to transmit scan to desktop.");
       }
@@ -95,6 +103,7 @@ function RemoteScanClient() {
       setErrorMsg("Failed to send scan to desktop.");
     } finally {
       setLoading(false);
+      isSendingRef.current = false;
     }
   };
 
@@ -245,12 +254,12 @@ function RemoteScanClient() {
           <div id="mobile-reader" className="w-full text-slate-200"></div>
 
           {lastScanned && (
-            <div className="absolute bottom-4 left-4 right-4 bg-teal-600/90 text-white p-3 rounded-2xl border border-teal-400 shadow-xl flex items-center justify-between text-xs animate-bounce">
+            <div className="absolute bottom-4 left-4 right-4 bg-teal-600 text-white p-3 rounded-2xl border border-teal-400 shadow-2xl flex items-center justify-between text-xs z-20">
               <div className="flex items-center gap-2 font-mono font-bold">
-                <Zap className="w-4 h-4 text-amber-300" />
-                <span>Sent: {lastScanned}</span>
+                <Zap className="w-4 h-4 text-amber-300 shrink-0" />
+                <span>Transmitted: {lastScanned}</span>
               </div>
-              <CheckCircle2 className="w-4.5 h-4.5 text-white" />
+              <CheckCircle2 className="w-4.5 h-4.5 text-white shrink-0" />
             </div>
           )}
         </div>
@@ -265,7 +274,7 @@ function RemoteScanClient() {
             value={manualCode}
             onChange={(e) => setManualCode(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if (e.key === "Enter" && manualCode.trim()) {
                 e.preventDefault();
                 handlePhoneScan(manualCode);
                 setManualCode("");
@@ -274,15 +283,22 @@ function RemoteScanClient() {
             className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-teal-500 font-medium"
           />
           <button
+            type="button"
             onClick={() => {
-              handlePhoneScan(manualCode);
-              setManualCode("");
+              if (manualCode.trim()) {
+                handlePhoneScan(manualCode);
+                setManualCode("");
+              }
             }}
             disabled={!manualCode.trim() || loading}
-            className="px-5 py-3 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            className="px-5 py-3 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50 active:scale-95 cursor-pointer"
           >
-            <Search className="w-4 h-4" />
-            Send
+            {loading ? (
+              <RefreshCw className="w-4 h-4 animate-spin text-white" />
+            ) : (
+              <Search className="w-4 h-4 text-white" />
+            )}
+            <span>{loading ? "Sending..." : "Send"}</span>
           </button>
         </div>
 

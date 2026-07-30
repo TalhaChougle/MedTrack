@@ -419,21 +419,22 @@ export default function BarcodeScannerModal({
     initPhonePairing();
   }, [inputSource]);
 
+  const lastSeenTimestampRef = useRef<number>(0);
+
   // Poll phone pairing session for remote scans
   useEffect(() => {
     if (inputSource !== "phone" || !phoneSessionId) return;
 
-    let lastSeen = 0;
     const interval = setInterval(async () => {
       try {
         const res = await fetch(
-          `/api/scanner/session?sessionId=${phoneSessionId}&since=${lastSeen}`
+          `/api/scanner/session?sessionId=${phoneSessionId}&since=${lastSeenTimestampRef.current}`
         );
         if (res.ok) {
           const data = await res.json();
           setPhonePaired(data.paired);
-          if (data.newScan) {
-            lastSeen = data.newScan.timestamp;
+          if (data.newScan && data.newScan.timestamp > lastSeenTimestampRef.current) {
+            lastSeenTimestampRef.current = data.newScan.timestamp;
             handleBarcodeScanned(data.newScan.barcode);
           }
         }
