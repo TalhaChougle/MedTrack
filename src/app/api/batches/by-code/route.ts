@@ -249,3 +249,77 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
+
+export async function PUT(req: Request) {
+  const session = await getAuthSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const shopId = session.user.shopId;
+  const userId = session.user.id;
+  const todayStr = new Date().toISOString().split("T")[0];
+  const nextYearStr = new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0];
+
+  try {
+    const { barcode, batchNumber, expiryDate, quantity, supplier } = await req.json();
+
+    if (!barcode) {
+      return NextResponse.json({ error: "Barcode is required" }, { status: 400 });
+    }
+
+    let [med] = await db
+      .select()
+      .from(medicines)
+      .where(and(eq(medicines.shopId, shopId), eq(medicines.barcode, barcode)));
+
+    if (!med) {
+      const generatedName = `Scanned Medicine (${barcode.slice(-6)})`;
+      const detectedSchedule = autoClassifySchedule(generatedName);
+      const [newMed] = await db
+        .insert(medicines)
+        .values({
+          shopId,
+          name: generatedName,
+          barcode,
+          manufacturer: "General Pharma",
+          schedule: detectedSchedule,
+          unitPrice: 25.0,
+          reorderThreshold: 10,
+        })
+        .returning();
+      med = newMed;
+    }
+
+    const existingBatches = await db
+      .select({ batchNumber: batches.batchNumber })
+      .from(batches)
+      .where(and(eq(batches.shopId, shopId), eq(batches.medicineId, med.id)));
+
+    const finalBatchNumber =
+      batchNumber || suggestNextBatchNumber(existingBatches.map((b) => b.batchNumber));
+
+    const finalQuantity = quantity || 100;
+    const finalExpiryDate = expiryDate || nextYearStr;
+    const finalSupplier = supplier || "Mobile Delivery Wholesaler";
+
+    const [newBatch] = await db
+      .insert(batches)
+      .values({
+        shopId,
+        medicineId: med.id,
+        batchNumber: finalBatchNumber,
+        quantity: finalQuantity,
+        expiryDate: finalExpiryDate,
+        supplier: finalSupplier,
+        costPrice: 15.0,
+        receivedDate: todayStr,
+      })
+      .returning();
+
+    return NextResponse.json({ success: true, medicine: med, batch: newBatch });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Auto stock failed";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}

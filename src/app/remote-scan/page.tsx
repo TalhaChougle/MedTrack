@@ -167,8 +167,11 @@ function RemoteScanClient() {
         html5QrcodeRef.current = html5Qrcode;
 
         const config = {
-          fps: 15,
-          qrbox: { width: 260, height: 130 },
+          fps: 20,
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
+            width: Math.min(viewfinderWidth - 10, Math.floor(viewfinderWidth * 0.92)),
+            height: Math.min(viewfinderHeight - 10, Math.floor(viewfinderHeight * 0.65)),
+          }),
         };
 
         const cameras = await Html5Qrcode.getCameras().catch(() => []);
@@ -256,7 +259,7 @@ function RemoteScanClient() {
 
       {/* Main Camera Scanner Area (Fixed Height - Zero Jumping) */}
       <div className="flex-1 my-3 flex flex-col justify-center items-center">
-        <div className="w-full max-w-[320px] aspect-square rounded-3xl overflow-hidden bg-black border-2 border-slate-700 relative shadow-2xl flex items-center justify-center">
+        <div className="w-full aspect-[4/3] max-h-[480px] rounded-3xl overflow-hidden bg-black border-2 border-teal-500/40 relative shadow-2xl flex items-center justify-center">
           <div id="mobile-reader" className="w-full h-full object-cover text-slate-200"></div>
         </div>
 
