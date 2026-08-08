@@ -44,7 +44,7 @@ export default function DashboardPage() {
     if (status === "unauthenticated") {
       router.push("/login");
     } else if (status === "authenticated") {
-      fetchDashboardData();
+      fetchDashboardData(true);
     }
   }, [status, router]);
 
@@ -58,8 +58,8 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const fetchDashboardData = async () => {
-    setLoading(true);
+  const fetchDashboardData = async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     try {
       const [medRes, alertRes, restockRes] = await Promise.all([
         fetch("/api/medicines"),
@@ -76,11 +76,11 @@ export default function DashboardPage() {
       const warning = alerts.filter((a: any) => a.level === "warning");
       const notice = alerts.filter((a: any) => a.level === "notice");
 
-      const totalUnits = meds.reduce((sum: number, m: any) => sum + (m.totalStock || 0), 0);
+      const totalUnits = meds.reduce((sum: number, m: any) => sum + (Number(m.totalStock) || 0), 0);
 
       setStats({
-        totalMedicines: meds.length,
-        totalBatches: alerts.length,
+        totalMedicines: Array.isArray(meds) ? meds.length : 0,
+        totalBatches: Array.isArray(alerts) ? alerts.length : 0,
         totalStockUnits: totalUnits,
         expiredCount: expired.length,
         urgentCount: urgent.length,
@@ -89,7 +89,9 @@ export default function DashboardPage() {
         reorderCount: restocks.length,
       });
 
-      setRecentAlerts(alerts.filter((a: any) => a.level !== null).slice(0, 5));
+      if (Array.isArray(alerts)) {
+        setRecentAlerts(alerts.filter((a: any) => a.level !== null).slice(0, 5));
+      }
     } catch (err) {
       console.error("Dashboard fetch error:", err);
     } finally {

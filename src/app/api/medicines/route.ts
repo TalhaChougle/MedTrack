@@ -45,7 +45,14 @@ export async function GET() {
       )
       .orderBy(medicines.name);
 
-    return NextResponse.json(medList);
+    const formatted = medList.map((m) => ({
+      ...m,
+      unitPrice: Number(m.unitPrice) || 0,
+      totalStock: Number(m.totalStock) || 0,
+      batchCount: Number(m.batchCount) || 0,
+    }));
+
+    return NextResponse.json(formatted);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Failed to fetch medicines";
     return NextResponse.json({ error: msg }, { status: 500 });

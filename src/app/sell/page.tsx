@@ -42,6 +42,16 @@ export default function SellFEFOPage() {
     }
   }, [status, router]);
 
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchAllMedicines();
+    };
+    window.addEventListener("medtrack:refresh", handleRefresh);
+    return () => {
+      window.removeEventListener("medtrack:refresh", handleRefresh);
+    };
+  }, []);
+
   const fetchAllMedicines = async () => {
     setSearchLoading(true);
     try {
