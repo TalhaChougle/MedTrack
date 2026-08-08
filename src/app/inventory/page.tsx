@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   X,
 } from "lucide-react";
+import { autoClassifySchedule } from "@/lib/scheduleClassifier";
 
 export default function InventoryPage() {
   const { data: session, status } = useSession();
@@ -60,6 +61,20 @@ export default function InventoryPage() {
       fetchInventoryData();
     }
   }, [status, router]);
+
+  useEffect(() => {
+    if (addMedOpen || addBatchOpen) {
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    };
+  }, [addMedOpen, addBatchOpen]);
 
   const fetchInventoryData = async () => {
     setLoading(true);
@@ -278,7 +293,7 @@ export default function InventoryPage() {
                       {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-base font-extrabold text-[#1E3A5F]">{med.name}</h3>
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
@@ -291,9 +306,18 @@ export default function InventoryPage() {
                         >
                           Schedule {med.schedule}
                         </span>
+                        {med.barcode ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-teal-100 text-teal-800 border border-teal-200">
+                            ⚡ Barcoded
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200">
+                            ✍️ Non-Barcoded (Manual)
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-slate-500 font-medium">
-                        {med.manufacturer} • Barcode: {med.barcode || "N/A"} • Price: ₹{med.unitPrice}
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        {med.manufacturer} • Barcode: {med.barcode || "None (Manual)"} • Selling Price: ₹{med.unitPrice}
                       </p>
                     </div>
                   </div>
@@ -340,24 +364,45 @@ export default function InventoryPage() {
                       <p className="text-xs text-slate-500 italic py-2">No active batches logged for this medicine yet.</p>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {medBatches.map((b) => (
-                          <div
-                            key={b.id}
-                            className="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-1.5 text-xs shadow-2xs"
-                          >
-                            <div className="flex items-center justify-between font-mono">
-                              <span className="font-bold text-[#1E3A5F]">{b.batchNumber}</span>
-                              <span className="font-bold text-slate-800">{b.quantity} Units</span>
+                        {medBatches.map((b) => {
+                          const todayStr = new Date().toISOString().split("T")[0];
+                          const isExpired = b.expiryDate < todayStr;
+
+                          return (
+                            <div
+                              key={b.id}
+                              className={`p-3.5 rounded-2xl border space-y-2 text-xs shadow-2xs ${
+                                isExpired ? "bg-rose-50/70 border-rose-300" : "bg-white border-slate-200"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between font-mono">
+                                <span className="font-bold text-[#1E3A5F]">{b.batchNumber}</span>
+                                {isExpired ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-rose-200 text-rose-900 border border-rose-300">
+                                    🔴 EXPIRED
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                    🟢 VALID
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-slate-600 space-y-0.5 text-[11px] font-medium">
+                                <p>
+                                  Quantity: <strong className={isExpired ? "text-rose-700" : "text-slate-800"}>{b.quantity} Units</strong>
+                                </p>
+                                <p>
+                                  Expiry:{" "}
+                                  <span className={isExpired ? "text-rose-700 font-extrabold line-through" : "text-teal-800 font-bold"}>
+                                    {b.expiryDate}
+                                  </span>
+                                </p>
+                                <p>Supplier: {b.supplier}</p>
+                                <p>Cost Price: ₹{b.costPrice}/unit</p>
+                              </div>
                             </div>
-                            <div className="text-slate-600 space-y-0.5 text-[11px] font-medium">
-                              <p>
-                                Expiry: <span className="text-amber-700 font-bold">{b.expiryDate}</span>
-                              </p>
-                              <p>Supplier: {b.supplier}</p>
-                              <p>Cost Price: ₹{b.costPrice}/unit</p>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -379,15 +424,51 @@ export default function InventoryPage() {
               </button>
             </div>
 
+            {/* Select Existing Medicine Dropdown */}
+            {medicinesList.length > 0 && (
+              <div className="p-3 rounded-2xl bg-teal-50 border border-teal-200 space-y-1.5 text-xs shadow-2xs">
+                <label className="block text-[#1E3A5F] font-extrabold text-xs">
+                  Choose Existing Stock Medicine (Auto-Fills All Details):
+                </label>
+                <select
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    const found = medicinesList.find((m) => m.id.toString() === selectedId);
+                    if (found) {
+                      setAddMedOpen(false);
+                      setSelectedMedForBatch(found);
+                      setAddBatchOpen(true);
+                    }
+                  }}
+                  className="w-full bg-white border border-teal-300 rounded-xl px-3 py-2 text-slate-800 font-bold text-xs focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                >
+                  <option value="">-- Or Choose Existing Medicine to Add Batch --</option>
+                  {medicinesList.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} • {m.manufacturer} (Schedule {m.schedule})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <form onSubmit={handleAddMedicine} className="space-y-4 text-xs">
               <div>
                 <label className="block text-slate-700 font-bold mb-1">Medicine Name *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Paracetamol 500mg"
+                  placeholder="e.g. Paracetamol 500mg, Amoxicillin 250mg, Cefixime..."
                   value={newMedData.name}
-                  onChange={(e) => setNewMedData({ ...newMedData, name: e.target.value })}
+                  onChange={(e) => {
+                    const nameVal = e.target.value;
+                    const autoDetected = autoClassifySchedule(nameVal);
+                    setNewMedData({
+                      ...newMedData,
+                      name: nameVal,
+                      schedule: autoDetected,
+                    });
+                  }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 focus:border-teal-600 font-medium"
                 />
               </div>
@@ -471,38 +552,64 @@ export default function InventoryPage() {
       {/* Modal: Add Batch */}
       {addBatchOpen && selectedMedForBatch && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 space-y-5 shadow-2xl">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-lg p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div>
-                <h3 className="text-base font-extrabold text-[#1E3A5F]">Add Stock Batch</h3>
-                <p className="text-xs text-teal-700 font-extrabold">{selectedMedForBatch.name}</p>
+                <h3 className="text-base font-extrabold text-[#1E3A5F]">Add New Batch to Existing Medicine</h3>
+                <p className="text-xs text-slate-500 font-medium">Adding stock for medicine already in catalog</p>
               </div>
               <button onClick={() => setAddBatchOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            {/* Auto-filled Medicine Card (Read Only) */}
+            <div className="p-4 rounded-2xl bg-teal-50/70 border border-teal-200/80 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-[#1E3A5F] text-sm">{selectedMedForBatch.name}</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-teal-200 text-teal-900">
+                    Schedule {selectedMedForBatch.schedule}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white text-teal-800 border border-teal-300">
+                  ✓ Auto-Filled From Stock
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-slate-600 text-[11px] font-medium pt-1 border-t border-teal-200/60">
+                <p><strong>Manufacturer:</strong> {selectedMedForBatch.manufacturer}</p>
+                <p><strong>Barcode:</strong> {selectedMedForBatch.barcode || "None (Manual Non-Barcoded)"}</p>
+                <p><strong>Selling Price:</strong> ₹{selectedMedForBatch.unitPrice}/unit</p>
+                <p><strong>Current Stock:</strong> {selectedMedForBatch.totalStock} units</p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>All medicine details above are auto-filled. Only fill batch number, price, expiry date, and quantity below manually.</span>
+            </div>
+
             <form onSubmit={handleAddBatch} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">Batch Number *</label>
+                  <label className="block text-slate-700 font-bold mb-1">1. Batch Number * (Manual)</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. BATCH-001"
+                    placeholder="e.g. BATCH-2026-08"
                     value={newBatchData.batchNumber}
                     onChange={(e) => setNewBatchData({ ...newBatchData, batchNumber: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-mono focus:border-teal-600"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-mono focus:border-teal-600 font-bold"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">Quantity Received *</label>
+                  <label className="block text-slate-700 font-bold mb-1">2. Quantity Received * (Manual)</label>
                   <input
                     type="number"
                     required
                     min="1"
-                    placeholder="e.g. 50"
+                    placeholder="e.g. 100"
                     value={newBatchData.quantity}
                     onChange={(e) => setNewBatchData({ ...newBatchData, quantity: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:border-teal-600 font-medium"
@@ -512,7 +619,7 @@ export default function InventoryPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">Expiry Date (YYYY-MM-DD) *</label>
+                  <label className="block text-slate-700 font-bold mb-1">3. Expiry Date * (Manual)</label>
                   <input
                     type="date"
                     required
@@ -523,26 +630,26 @@ export default function InventoryPage() {
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">Supplier *</label>
+                  <label className="block text-slate-700 font-bold mb-1">4. Cost Price Per Unit (₹) (Manual)</label>
                   <input
-                    type="text"
-                    required
-                    placeholder="e.g. Cipla Distributor"
-                    value={newBatchData.supplier}
-                    onChange={(e) => setNewBatchData({ ...newBatchData, supplier: e.target.value })}
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 12.50"
+                    value={newBatchData.costPrice}
+                    onChange={(e) => setNewBatchData({ ...newBatchData, costPrice: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:border-teal-600 font-medium"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">Cost Price Per Unit (₹)</label>
+                <label className="block text-slate-700 font-bold mb-1">5. Supplier Name * (Manual)</label>
                 <input
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g. 10.50"
-                  value={newBatchData.costPrice}
-                  onChange={(e) => setNewBatchData({ ...newBatchData, costPrice: e.target.value })}
+                  type="text"
+                  required
+                  placeholder="e.g. Cipla Distributor / Local Pharma Vendor"
+                  value={newBatchData.supplier}
+                  onChange={(e) => setNewBatchData({ ...newBatchData, supplier: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 focus:border-teal-600 font-medium"
                 />
               </div>

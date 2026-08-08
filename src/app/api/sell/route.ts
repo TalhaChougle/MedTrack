@@ -15,7 +15,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { medicineId, quantity } = body;
+    const { medicineId, quantity, unitPrice: customUnitPrice } = body;
 
     const medId = parseInt(medicineId);
     const requestedQty = parseInt(quantity);
@@ -45,9 +45,10 @@ export async function POST(req: Request) {
       );
     }
 
+    const todayStr = new Date().toISOString().split("T")[0];
+
     // 1. Fetch all batches for medicine with quantity > 0 and shopId matching
-    // 2. Sort ascending by expiry_date (nearest expiry first)
-    const availableBatches = await db
+    const allBatchesForMed = await db
       .select()
       .from(batches)
       .where(
@@ -59,7 +60,34 @@ export async function POST(req: Request) {
       )
       .orderBy(asc(batches.expiryDate));
 
-    // 3. Sum total available
+    // Separate valid unexpired stock vs expired stock
+    const availableBatches = allBatchesForMed.filter((b) => b.expiryDate >= todayStr);
+    const expiredBatches = allBatchesForMed.filter((b) => b.expiryDate < todayStr);
+
+    if (availableBatches.length === 0 && expiredBatches.length > 0) {
+      const expiredSample = expiredBatches[0];
+      return NextResponse.json(
+        {
+          error: `Cannot dispense expired stock! All available stock for ${med.name} is EXPIRED (Batch ${expiredSample.batchNumber} expired on ${expiredSample.expiryDate}). Expired medicines cannot be sold to patients. Please log under Wastage.`,
+          isExpiredError: true,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Determine effective selling unit price (passed custom price -> med price -> batch cost price fallback)
+    const passedPrice = parseFloat(customUnitPrice);
+    const fallbackPrice = allBatchesForMed.length > 0 ? (allBatchesForMed[0].costPrice || 0) : 0;
+    const effectiveUnitPrice = !isNaN(passedPrice) && passedPrice > 0 
+      ? passedPrice 
+      : (med.unitPrice > 0 ? med.unitPrice : fallbackPrice);
+
+    // Update medicine unit price in database if it was updated or previously zero
+    if (effectiveUnitPrice > 0 && med.unitPrice !== effectiveUnitPrice) {
+      await db.update(medicines).set({ unitPrice: effectiveUnitPrice }).where(eq(medicines.id, med.id));
+    }
+
+    // 3. Sum total available valid unexpired stock
     const totalAvailable = availableBatches.reduce((sum, b) => sum + b.quantity, 0);
 
     if (totalAvailable < requestedQty) {
@@ -107,6 +135,8 @@ export async function POST(req: Request) {
       });
     }
 
+    const totalSaleAmount = requestedQty * effectiveUnitPrice;
+
     // 6. Write audit log entry
     await db.insert(auditLogs).values({
       shopId,
@@ -117,7 +147,8 @@ export async function POST(req: Request) {
       detail: JSON.stringify({
         medicineName: med.name,
         requestedQuantity: requestedQty,
-        totalSaleAmount: requestedQty * med.unitPrice,
+        unitPrice: effectiveUnitPrice,
+        totalSaleAmount,
         deductions,
       }),
     });
@@ -127,8 +158,8 @@ export async function POST(req: Request) {
       success: true,
       medicineName: med.name,
       requestedQuantity: requestedQty,
-      unitPrice: med.unitPrice,
-      totalPrice: requestedQty * med.unitPrice,
+      unitPrice: effectiveUnitPrice,
+      totalPrice: totalSaleAmount,
       deductions,
     });
   } catch (error: unknown) {

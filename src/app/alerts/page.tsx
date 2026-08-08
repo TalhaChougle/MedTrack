@@ -39,6 +39,20 @@ export default function ExpiryAlertsPage() {
     }
   }, [status, router]);
 
+  useEffect(() => {
+    if (wastageModalOpen) {
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    };
+  }, [wastageModalOpen]);
+
   const fetchAlerts = async () => {
     setLoading(true);
     try {
@@ -310,21 +324,29 @@ export default function ExpiryAlertsPage() {
                       <p className="text-xs text-slate-500 font-medium">Manufacturer: {batch.manufacturer}</p>
                     </div>
 
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider shrink-0 ${
-                        isExpired
-                          ? "bg-rose-600 text-white"
-                          : isUrgent
-                          ? "bg-amber-500 text-slate-950"
-                          : isWarning
-                          ? "bg-yellow-400 text-slate-950"
-                          : isNotice
-                          ? "bg-teal-600 text-white"
-                          : "bg-emerald-600 text-white"
-                      }`}
-                    >
-                      {isExpired ? "EXPIRED" : `${batch.daysLeft} Days Left`}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {batch.isWastageLogged && (
+                        <span className="px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>✓ LOGGED</span>
+                        </span>
+                      )}
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                          isExpired
+                            ? "bg-rose-600 text-white"
+                            : isUrgent
+                            ? "bg-amber-500 text-slate-950"
+                            : isWarning
+                            ? "bg-yellow-400 text-slate-950"
+                            : isNotice
+                            ? "bg-teal-600 text-white"
+                            : "bg-emerald-600 text-white"
+                        }`}
+                      >
+                        {isExpired ? "EXPIRED" : `${batch.daysLeft} Days Left`}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Details */}
@@ -335,7 +357,9 @@ export default function ExpiryAlertsPage() {
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-500 uppercase block font-bold">Remaining Stock</span>
-                      <span className="font-bold text-slate-800">{batch.quantity} Units</span>
+                      <span className={`font-bold ${batch.quantity === 0 ? "text-slate-400 line-through" : "text-slate-800"}`}>
+                        {batch.quantity} Units
+                      </span>
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-500 uppercase block font-bold">Expiry Date</span>
@@ -348,7 +372,11 @@ export default function ExpiryAlertsPage() {
                   </div>
 
                   {/* Recommended Action Banner */}
-                  <div className="p-3 rounded-2xl bg-white border border-slate-200 text-xs space-y-1">
+                  <div className={`p-3 rounded-2xl text-xs space-y-1 ${
+                    batch.isWastageLogged
+                      ? "bg-emerald-50 border border-emerald-200 text-emerald-900"
+                      : "bg-white border border-slate-200"
+                  }`}>
                     <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest block">
                       Recommended Action
                     </span>
@@ -359,13 +387,23 @@ export default function ExpiryAlertsPage() {
                 {/* Card Action Button */}
                 <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
                   <span className="text-[11px] text-slate-500 font-bold">Unit Price: ₹{batch.costPrice}</span>
-                  <button
-                    onClick={() => handleOpenWastage(batch)}
-                    className="px-3.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Log Wastage</span>
-                  </button>
+                  {batch.isWastageLogged ? (
+                    <button
+                      disabled
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-black flex items-center gap-1.5 shadow-2xs opacity-90 cursor-default"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>✓ Wastage Logged</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleOpenWastage(batch)}
+                      className="px-3.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Log Wastage</span>
+                    </button>
+                  )}
                 </div>
               </div>
             );

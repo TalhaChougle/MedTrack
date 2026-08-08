@@ -23,6 +23,7 @@ export default function SellFEFOPage() {
   const [selectedMed, setSelectedMed] = useState<any>(null);
   const [medBatches, setMedBatches] = useState<any[]>([]);
   const [quantity, setQuantity] = useState("1");
+  const [customUnitPrice, setCustomUnitPrice] = useState("");
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
 
@@ -31,42 +32,56 @@ export default function SellFEFOPage() {
 
   const [scannerOpen, setScannerOpen] = useState(false);
 
+  const [allMedicines, setAllMedicines] = useState<any[]>([]);
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
+    } else if (status === "authenticated") {
+      fetchAllMedicines();
     }
   }, [status, router]);
 
-  // Search medicines
+  const fetchAllMedicines = async () => {
+    setSearchLoading(true);
+    try {
+      const res = await fetch("/api/medicines");
+      if (res.ok) {
+        const data = await res.json();
+        setAllMedicines(data);
+        setSearchResults(data);
+      }
+    } catch (err) {
+      console.error("Fetch all medicines error:", err);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Search/Filter medicines
   useEffect(() => {
     if (!query.trim()) {
-      setSearchResults([]);
+      setSearchResults(allMedicines);
       return;
     }
 
-    const timer = setTimeout(async () => {
-      setSearchLoading(true);
-      try {
-        const res = await fetch(`/api/medicines/search?q=${encodeURIComponent(query.trim())}`);
-        if (res.ok) {
-          const data = await res.json();
-          setSearchResults(data);
-        }
-      } catch (err) {
-        console.error("Search error:", err);
-      } finally {
-        setSearchLoading(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [query]);
+    const filtered = allMedicines.filter((m) =>
+      m.name.toLowerCase().includes(query.toLowerCase()) ||
+      m.manufacturer?.toLowerCase().includes(query.toLowerCase()) ||
+      (m.barcode && m.barcode.includes(query))
+    );
+    setSearchResults(filtered);
+  }, [query, allMedicines]);
 
   // Select medicine and load its batches for FEFO preview
   const handleSelectMedicine = async (med: any) => {
     setSelectedMed(med);
     setErrorMsg("");
     setSaleResult(null);
+
+    // Initial unit price from medicine or zero fallback
+    const initialPrice = med.unitPrice > 0 ? med.unitPrice.toString() : "";
+    setCustomUnitPrice(initialPrice);
 
     try {
       const res = await fetch(`/api/batches`);
@@ -76,16 +91,31 @@ export default function SellFEFOPage() {
           (b: any) => b.medicineId === med.id && b.quantity > 0
         );
         setMedBatches(filtered);
+
+        // If med.unitPrice was 0, fallback to batch cost price if available
+        if ((!med.unitPrice || med.unitPrice === 0) && filtered.length > 0) {
+          const fallbackBatchPrice = filtered[0].costPrice || 0;
+          if (fallbackBatchPrice > 0) {
+            setCustomUnitPrice(fallbackBatchPrice.toString());
+          }
+        }
       }
     } catch (e) {
       console.error(e);
     }
   };
 
-  // Calculate FEFO Preview allocation
+  // Calculate FEFO Preview allocation (Excludes Expired Batches)
   const calculateFEFOPreview = () => {
     const reqQty = parseInt(quantity) || 0;
-    if (reqQty <= 0 || medBatches.length === 0) return [];
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    const validBatches = medBatches.filter((b) => b.expiryDate >= todayStr && b.quantity > 0);
+    const expiredBatches = medBatches.filter((b) => b.expiryDate < todayStr && b.quantity > 0);
+
+    if (reqQty <= 0 || validBatches.length === 0) {
+      return { allocation: [], expiredBatches, validBatches };
+    }
 
     let remaining = reqQty;
     const allocation: Array<{
@@ -96,7 +126,7 @@ export default function SellFEFOPage() {
       takeQty: number;
     }> = [];
 
-    for (const b of medBatches) {
+    for (const b of validBatches) {
       if (remaining <= 0) break;
       const take = Math.min(b.quantity, remaining);
       allocation.push({
@@ -109,10 +139,12 @@ export default function SellFEFOPage() {
       remaining -= take;
     }
 
-    return allocation;
+    return { allocation, expiredBatches, validBatches };
   };
 
-  const previewAllocation = calculateFEFOPreview();
+  const fefoData = calculateFEFOPreview();
+  const previewAllocation = fefoData.allocation;
+  const expiredBatchesInStock = fefoData.expiredBatches;
 
   // Execute FEFO Dispense
   const handleExecuteDispense = async (e: React.FormEvent) => {
@@ -125,6 +157,8 @@ export default function SellFEFOPage() {
       return;
     }
 
+    const priceToSubmit = parseFloat(customUnitPrice) || 0;
+
     setLoading(true);
     setErrorMsg("");
     setSaleResult(null);
@@ -136,6 +170,7 @@ export default function SellFEFOPage() {
         body: JSON.stringify({
           medicineId: selectedMed.id,
           quantity: reqQty,
+          unitPrice: priceToSubmit,
         }),
       });
 
@@ -145,7 +180,34 @@ export default function SellFEFOPage() {
         setErrorMsg(data.error || "Dispense transaction failed.");
       } else {
         setSaleResult(data);
-        handleSelectMedicine(selectedMed);
+
+        // Global refresh event for dashboard/nav/inventory
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("medtrack:refresh"));
+        }
+
+        // Refresh all medicines list and updated batches
+        const [medRes, batchRes] = await Promise.all([
+          fetch("/api/medicines"),
+          fetch("/api/batches"),
+        ]);
+
+        if (medRes.ok) {
+          const freshMeds = await medRes.json();
+          setAllMedicines(freshMeds);
+          const updatedMed = freshMeds.find((m: any) => m.id === selectedMed.id);
+          if (updatedMed) {
+            setSelectedMed(updatedMed);
+          }
+        }
+
+        if (batchRes.ok) {
+          const allBatches = await batchRes.json();
+          const filtered = allBatches.filter(
+            (b: any) => b.medicineId === selectedMed.id && b.quantity > 0
+          );
+          setMedBatches(filtered);
+        }
       }
     } catch (err: any) {
       setErrorMsg("Network error processing dispense.");
@@ -203,35 +265,52 @@ export default function SellFEFOPage() {
 
             {/* Results List */}
             {searchLoading ? (
-              <p className="text-xs text-slate-500 text-center py-4 font-medium">Searching inventory...</p>
+              <p className="text-xs text-slate-500 text-center py-4 font-medium">Loading inventory medicines...</p>
             ) : searchResults.length > 0 ? (
-              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                <div className="flex items-center justify-between px-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  <span>{query.trim() ? "Search Results" : "All Inventory Medicines"}</span>
+                  <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{searchResults.length}</span>
+                </div>
                 {searchResults.map((med) => (
                   <button
                     key={med.id}
                     onClick={() => handleSelectMedicine(med)}
                     className={`w-full text-left p-3 rounded-2xl border text-xs transition-all flex items-center justify-between cursor-pointer ${
                       selectedMed?.id === med.id
-                        ? "bg-teal-50 border-teal-300 text-slate-800"
+                        ? "bg-teal-50 border-teal-300 text-slate-800 shadow-xs"
                         : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
                     }`}
                   >
-                    <div>
-                      <p className="font-extrabold text-[#1E3A5F] text-sm">{med.name}</p>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-extrabold text-[#1E3A5F] text-sm">{med.name}</p>
+                        {med.barcode ? (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-100 text-teal-800 border border-teal-200">
+                            ⚡ Barcoded
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            ✍️ Manual
+                          </span>
+                        )}
+                      </div>
                       <p className="text-slate-500 font-medium">
-                        {med.manufacturer} • Schedule {med.schedule}
+                        {med.manufacturer} • Schedule {med.schedule} {med.unitPrice ? `• ₹${med.unitPrice}` : ""}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <span className="font-extrabold text-teal-700 text-sm">{med.totalStock}</span>
+                    <div className="text-right shrink-0">
+                      <span className={`font-extrabold text-sm ${med.totalStock > 0 ? "text-teal-700" : "text-rose-500"}`}>
+                        {med.totalStock}
+                      </span>
                       <span className="block text-[10px] text-slate-500 font-bold">In Stock</span>
                     </div>
                   </button>
                 ))}
               </div>
-            ) : query.trim() ? (
-              <p className="text-xs text-slate-500 text-center py-4 font-medium">No matching medicine found.</p>
-            ) : null}
+            ) : (
+              <p className="text-xs text-slate-500 text-center py-4 font-medium">No matching medicines found in inventory.</p>
+            )}
           </div>
         </div>
 
@@ -250,12 +329,23 @@ export default function SellFEFOPage() {
               {/* Selected Medicine Info Card */}
               <div className="flex items-center justify-between border-b border-slate-200 pb-4">
                 <div>
-                  <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-teal-50 text-teal-800 font-bold border border-teal-200">
-                    Schedule {selectedMed.schedule}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded bg-teal-50 text-teal-800 font-bold border border-teal-200">
+                      Schedule {selectedMed.schedule}
+                    </span>
+                    {selectedMed.barcode ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-teal-100 text-teal-900 font-extrabold border border-teal-200">
+                        ⚡ Barcoded
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-extrabold border border-slate-200">
+                        ✍️ Non-Barcoded (Manual)
+                      </span>
+                    )}
+                  </div>
                   <h3 className="text-xl font-black text-[#1E3A5F] mt-1">{selectedMed.name}</h3>
                   <p className="text-xs text-slate-500 font-medium">
-                    Manufacturer: {selectedMed.manufacturer} • Unit Price: ₹{selectedMed.unitPrice}
+                    Manufacturer: {selectedMed.manufacturer} • Barcode: {selectedMed.barcode || "None"}
                   </p>
                 </div>
                 <div className="text-right">
@@ -266,11 +356,11 @@ export default function SellFEFOPage() {
 
               {/* Dispense Form */}
               <form onSubmit={handleExecuteDispense} className="space-y-6">
-                <div>
-                  <label className="block text-xs font-bold text-[#1E3A5F] uppercase tracking-wider mb-2">
-                    Requested Quantity to Dispense
-                  </label>
-                  <div className="flex items-center gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3A5F] uppercase tracking-wider mb-1.5">
+                      1. Quantity to Dispense *
+                    </label>
                     <input
                       type="number"
                       min="1"
@@ -278,17 +368,40 @@ export default function SellFEFOPage() {
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
                       required
-                      className="w-36 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-lg font-bold text-slate-800 text-center focus:outline-none focus:border-teal-600"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-lg font-bold text-slate-800 text-center focus:outline-none focus:border-teal-600 shadow-xs"
                     />
-                    <div className="text-xs text-slate-600 font-medium">
-                      <p className="font-bold text-[#1E3A5F]">
-                        Total Amount: ₹{(parseInt(quantity) || 0) * selectedMed.unitPrice}
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        Calculated at ₹{selectedMed.unitPrice}/unit
-                      </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3A5F] uppercase tracking-wider mb-1.5">
+                      2. Selling Price Per Unit (₹) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={customUnitPrice}
+                        onChange={(e) => setCustomUnitPrice(e.target.value)}
+                        placeholder="e.g. 25.00"
+                        required
+                        className="w-full bg-teal-50/50 border border-teal-300 rounded-2xl px-4 py-3 text-lg font-bold text-teal-800 text-center focus:outline-none focus:border-teal-600 shadow-xs"
+                      />
                     </div>
                   </div>
+                </div>
+
+                {/* Total Bill Calculation Summary Card */}
+                <div className="p-4 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-between shadow-xs">
+                  <div>
+                    <span className="text-xs text-teal-900 font-extrabold block uppercase tracking-wider">Total Sale Bill Amount</span>
+                    <span className="text-[11px] text-slate-600 font-medium">
+                      Calculated at ₹{parseFloat(customUnitPrice) || 0}/unit × {parseInt(quantity) || 0} units
+                    </span>
+                  </div>
+                  <span className="text-2xl font-black text-teal-700 font-mono">
+                    ₹{((parseInt(quantity) || 0) * (parseFloat(customUnitPrice) || 0)).toFixed(2)}
+                  </span>
                 </div>
 
                 {/* FEFO Batch Allocation Live Preview */}
@@ -301,31 +414,68 @@ export default function SellFEFOPage() {
                     <span className="text-[11px] text-slate-500 font-medium">Sorted by Expiry ASC</span>
                   </div>
 
+                  {/* Expired Stock Warning Banner if expired batches present */}
+                  {expiredBatchesInStock.length > 0 && (
+                    <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-2">
+                      <div className="flex items-center justify-between font-extrabold">
+                        <span className="flex items-center gap-1.5 text-rose-700">
+                          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                          <span>{expiredBatchesInStock.length} Expired Batch(es) Detected & Blocked</span>
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-rose-200 text-rose-900 text-[10px] uppercase font-black">
+                          DO NOT DISPENSE
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-rose-700 font-medium">
+                        The FEFO algorithm automatically excludes expired stock from sales to safeguard patient health. Log these expired batches under Wastage.
+                      </p>
+                      <div className="space-y-1">
+                        {expiredBatchesInStock.map((b: any) => (
+                          <div key={b.id} className="p-2.5 rounded-xl bg-white border border-rose-200 flex items-center justify-between font-mono text-[11px]">
+                            <span>Batch: <strong className="text-rose-900">{b.batchNumber}</strong> (Exp: <span className="line-through text-rose-600">{b.expiryDate}</span>)</span>
+                            <span className="font-extrabold text-rose-600">🔴 EXPIRED ({b.quantity} units)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {previewAllocation.length === 0 ? (
-                    <p className="text-xs text-rose-600 italic font-semibold">No active batches available for this medicine.</p>
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500 font-medium space-y-1">
+                      <p className="font-bold text-slate-700">No Valid Unexpired Batches Available</p>
+                      <p className="text-[11px]">
+                        {expiredBatchesInStock.length > 0
+                          ? "All available stock for this medicine is EXPIRED. Please add a fresh batch or log wastage."
+                          : "Please stock in a new batch to dispense this medicine."}
+                      </p>
+                    </div>
                   ) : (
                     <div className="space-y-2">
                       {previewAllocation.map((item, idx) => (
                         <div
                           key={idx}
-                          className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
+                          className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-200 flex items-center justify-between text-xs shadow-2xs"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="w-6 h-6 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-extrabold text-[11px]">
+                            <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-extrabold text-[11px]">
                               #{idx + 1}
                             </span>
                             <div>
-                              <p className="font-mono font-bold text-slate-800">{item.batchNumber}</p>
-                              <p className="text-slate-500 text-[11px] font-medium">
-                                Expiry: <span className="text-amber-700 font-bold">{item.expiryDate}</span> •{" "}
-                                {item.supplier}
+                              <div className="flex items-center gap-2">
+                                <p className="font-mono font-bold text-[#1E3A5F]">{item.batchNumber}</p>
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-200 text-emerald-900 border border-emerald-300">
+                                  🟢 VALID UNEXPIRED BATCH
+                                </span>
+                              </div>
+                              <p className="text-slate-600 text-[11px] font-medium mt-0.5">
+                                Expiry Date: <strong className="text-emerald-800">{item.expiryDate}</strong> • Supplier: {item.supplier}
                               </p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <span className="font-bold text-teal-700 text-sm">-{item.takeQty} units</span>
-                            <span className="block text-[10px] text-slate-500">
-                              (Batch has {item.currentQty} left)
+                            <span className="font-extrabold text-emerald-700 text-sm">-{item.takeQty} units</span>
+                            <span className="block text-[10px] text-slate-500 font-medium">
+                              ({item.currentQty} left in batch)
                             </span>
                           </div>
                         </div>
@@ -355,46 +505,54 @@ export default function SellFEFOPage() {
             </div>
           )}
 
-          {/* Sale Receipt Summary Modal / Card */}
+          {/* Sale Receipt Summary Card */}
           {saleResult && (
-            <div className="bg-white border border-teal-300 rounded-3xl p-6 space-y-4 shadow-xl">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <div className="flex items-center gap-2 text-teal-700">
-                  <CheckCircle2 className="w-5 h-5" />
-                  <h3 className="text-base font-extrabold text-[#1E3A5F]">Dispense Transaction Successful</h3>
+            <div className="bg-emerald-50/50 border border-emerald-300 rounded-3xl p-6 space-y-4 shadow-xl animate-in fade-in slide-in-from-bottom-3 duration-300">
+              <div className="flex items-center justify-between border-b border-emerald-200 pb-3">
+                <div className="flex items-center gap-2 text-emerald-800">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+                  <div>
+                    <h3 className="text-base font-extrabold text-[#1E3A5F]">Dispense & Sale Completed!</h3>
+                    <p className="text-[11px] text-emerald-700 font-semibold">Stock deducted according to FEFO algorithm</p>
+                  </div>
                 </div>
-                <span className="text-xs text-slate-500 font-medium">{new Date().toLocaleTimeString()}</span>
+                <button
+                  onClick={() => setSaleResult(null)}
+                  className="px-3 py-1 rounded-xl bg-white hover:bg-slate-100 text-slate-600 text-xs font-bold border border-slate-200 cursor-pointer"
+                >
+                  Dismiss Receipt
+                </button>
               </div>
 
-              <div className="space-y-2 text-xs font-medium">
-                <div className="flex justify-between py-1 border-b border-slate-100">
-                  <span className="text-slate-500">Medicine:</span>
-                  <span className="font-bold text-slate-800">{saleResult.medicineName}</span>
+              <div className="grid grid-cols-3 gap-3 text-xs bg-white p-3.5 rounded-2xl border border-emerald-200/60 font-medium">
+                <div>
+                  <span className="text-slate-400 text-[10px] block font-bold uppercase">Medicine Name</span>
+                  <span className="font-extrabold text-[#1E3A5F] text-sm">{saleResult.medicineName}</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-100">
-                  <span className="text-slate-500">Total Quantity Sold:</span>
-                  <span className="font-bold text-slate-800">{saleResult.requestedQuantity} units</span>
+                <div>
+                  <span className="text-slate-400 text-[10px] block font-bold uppercase">Total Sold</span>
+                  <span className="font-bold text-slate-800 text-sm">{saleResult.requestedQuantity} Units</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-100">
-                  <span className="text-slate-500">Total Bill Amount:</span>
-                  <span className="font-extrabold text-teal-700 text-sm">₹{saleResult.totalPrice}</span>
+                <div>
+                  <span className="text-slate-400 text-[10px] block font-bold uppercase">Total Bill Amount</span>
+                  <span className="font-black text-emerald-700 text-base">₹{saleResult.totalPrice}</span>
                 </div>
               </div>
 
-              <div className="space-y-2 pt-2">
+              <div className="space-y-2 pt-1">
                 <p className="text-[11px] font-bold text-[#1E3A5F] uppercase tracking-wider">
-                  Batches Deducted (FEFO Order):
+                  Batches Deducted (Nearest Expiry First):
                 </p>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {saleResult.deductions?.map((d: any, i: number) => (
                     <div
                       key={i}
-                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex justify-between text-xs font-mono"
+                      className="p-3 rounded-xl bg-white border border-emerald-200 flex items-center justify-between text-xs font-mono shadow-2xs"
                     >
-                      <span className="text-slate-700">
-                        {d.batchNumber} (Exp: {d.expiryDate})
+                      <span className="text-slate-700 font-semibold">
+                        {d.batchNumber} (Exp: <strong className="text-amber-700">{d.expiryDate}</strong>)
                       </span>
-                      <span className="text-teal-700 font-bold">
+                      <span className="text-emerald-700 font-extrabold">
                         -{d.deductedQuantity} units ({d.newBatchQuantity} remaining)
                       </span>
                     </div>

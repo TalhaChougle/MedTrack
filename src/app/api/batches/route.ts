@@ -94,6 +94,12 @@ export async function POST(req: Request) {
       );
     }
 
+    const parsedCostPrice = parseFloat(costPrice) || 0;
+    if (med.unitPrice === 0 && parsedCostPrice > 0) {
+      await db.update(medicines).set({ unitPrice: parsedCostPrice }).where(eq(medicines.id, med.id));
+      med.unitPrice = parsedCostPrice;
+    }
+
     const todayStr = new Date().toISOString().split("T")[0];
 
     const [newBatch] = await db

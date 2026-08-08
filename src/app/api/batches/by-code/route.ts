@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { medicines, batches, auditLogs } from "@/lib/db/schema";
+import { medicines, batches, auditLogs, shops, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { autoClassifySchedule } from "@/lib/scheduleClassifier";
 
 function suggestNextBatchNumber(batchNumbers: string[]): string {
   let maxNum = 0;
@@ -118,6 +119,17 @@ export async function POST(req: Request) {
       );
     }
 
+    // Ensure shop record exists for foreign key constraint safety
+    const [existingShop] = await db.select().from(shops).where(eq(shops.id, shopId));
+    if (!existingShop) {
+      await db.insert(shops).values({
+        id: shopId,
+        name: "Apex MedTrack Pharmacy",
+        address: "123 Health Ave",
+        phone: "+1-800-555-MEDS",
+      });
+    }
+
     // Auto-resolve or create medicine
     let [med] = await db
       .select()
@@ -129,8 +141,16 @@ export async function POST(req: Request) {
         )
       );
 
+    const parsedCostPrice = parseFloat(costPrice) || 0;
+    const parsedPrice = parseFloat(price) || 0;
+    const newPriceToUse = parsedPrice > 0 ? parsedPrice : parsedCostPrice;
+
     if (!med) {
       const nameToUse = medicineName?.trim() || `Medicine (${barcode.trim()})`;
+      const autoSchedule = (schedule && schedule.trim() !== "OTC") 
+        ? schedule.trim() 
+        : autoClassifySchedule(nameToUse);
+
       [med] = await db
         .insert(medicines)
         .values({
@@ -138,10 +158,13 @@ export async function POST(req: Request) {
           barcode: barcode.trim(),
           name: nameToUse,
           manufacturer: manufacturer?.trim() || "General Pharma",
-          schedule: schedule?.trim() || "OTC",
-          unitPrice: parseFloat(price) || 0,
+          schedule: autoSchedule,
+          unitPrice: newPriceToUse,
         })
         .returning();
+    } else if (med.unitPrice === 0 && newPriceToUse > 0) {
+      await db.update(medicines).set({ unitPrice: newPriceToUse }).where(eq(medicines.id, med.id));
+      med.unitPrice = newPriceToUse;
     }
 
     const existingBatches = await db
@@ -181,6 +204,21 @@ export async function POST(req: Request) {
         receivedDate: receivedDate ? receivedDate.trim() : todayStr,
       })
       .returning();
+
+    // Ensure user record exists for foreign key constraint safety in audit_logs
+    if (userId) {
+      const [existingUser] = await db.select().from(users).where(eq(users.id, userId));
+      if (!existingUser) {
+        await db.insert(users).values({
+          id: userId,
+          shopId,
+          name: session.user.name || "Staff Member",
+          email: session.user.email || `staff_${userId}@medtrack.com`,
+          passwordHash: "$2a$12$DummyHashForDemoUserOnly1234567890",
+          role: session.user.role || "pharmacist",
+        });
+      }
+    }
 
     // Audit log
     await db.insert(auditLogs).values({

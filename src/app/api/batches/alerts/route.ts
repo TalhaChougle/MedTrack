@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { batches, medicines } from "@/lib/db/schema";
+import { batches, medicines, wastageLogs } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 
 export function classifyExpiry(dateStr: string) {
@@ -77,13 +77,29 @@ export async function GET() {
       .where(eq(batches.shopId, shopId))
       .orderBy(asc(batches.expiryDate));
 
+    const loggedWastages = await db
+      .select({ batchId: wastageLogs.batchId, batchNumber: wastageLogs.batchNumber })
+      .from(wastageLogs)
+      .where(eq(wastageLogs.shopId, shopId));
+
+    const loggedBatchIdSet = new Set(loggedWastages.map((w) => w.batchId).filter(Boolean));
+    const loggedBatchNumSet = new Set(loggedWastages.map((w) => w.batchNumber).filter(Boolean));
+
     const alertItems = list.map((batch) => {
       const alertInfo = classifyExpiry(batch.expiryDate);
+      const isWastageLogged =
+        batch.quantity === 0 ||
+        loggedBatchIdSet.has(batch.id) ||
+        loggedBatchNumSet.has(batch.batchNumber);
+
       return {
         ...batch,
         daysLeft: alertInfo.daysLeft,
         level: alertInfo.level,
-        action: alertInfo.action,
+        action: isWastageLogged
+          ? "✓ Wastage already logged & written off from shelf stock."
+          : alertInfo.action,
+        isWastageLogged,
       };
     });
 

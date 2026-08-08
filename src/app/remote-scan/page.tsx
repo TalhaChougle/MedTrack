@@ -224,51 +224,58 @@ function RemoteScanClient() {
   }, [sessionId, paired]);
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col justify-between p-4 sm:p-6 font-sans select-none">
+    <div className="min-h-screen bg-slate-900 text-white flex flex-col justify-between p-4 font-sans select-none max-w-md mx-auto">
       {/* Top Header */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 shadow-lg backdrop-blur-md">
+        <div className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-2xl p-3.5 shadow-lg">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center border border-teal-500/30">
-              <Smartphone className="w-6 h-6" />
+            <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center border border-teal-500/30">
+              <Smartphone className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="font-black text-sm text-white tracking-wide flex items-center gap-2">
-                <span>MedTrack Mobile Scanner</span>
-              </h1>
-              <p className="text-[11px] text-slate-400 font-medium">
+              <h1 className="font-black text-xs text-white tracking-wide">MedTrack Wireless Scanner</h1>
+              <p className="text-[10px] text-slate-400 font-medium">
                 {sessionId ? `Session #${sessionId}` : "Not Connected"}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-bold">
-            <Wifi className="w-3.5 h-3.5 animate-pulse text-teal-400" />
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-[10px] font-bold">
+            <Wifi className="w-3 h-3 animate-pulse text-teal-400" />
             <span>{paired ? "LIVE POS" : "CONNECTING..."}</span>
           </div>
         </div>
 
         {errorMsg && (
-          <div className="p-3.5 rounded-xl bg-rose-950/80 border border-rose-800/80 text-rose-200 text-xs font-semibold flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs font-semibold flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
       </div>
 
-      {/* Main Camera Scanner Area */}
-      <div className="flex-1 my-4 flex flex-col justify-center">
-        <div className="relative rounded-3xl overflow-hidden bg-black border-2 border-slate-700 min-h-[300px] flex items-center justify-center shadow-2xl">
-          <div id="mobile-reader" className="w-full text-slate-200"></div>
+      {/* Main Camera Scanner Area (Fixed Height - Zero Jumping) */}
+      <div className="flex-1 my-3 flex flex-col justify-center items-center">
+        <div className="w-full max-w-[320px] aspect-square rounded-3xl overflow-hidden bg-black border-2 border-slate-700 relative shadow-2xl flex items-center justify-center">
+          <div id="mobile-reader" className="w-full h-full object-cover text-slate-200"></div>
+        </div>
 
-          {lastScanned && (
-            <div className="absolute bottom-4 left-4 right-4 bg-teal-600 text-white p-3 rounded-2xl border border-teal-400 shadow-2xl flex items-center justify-between text-xs z-20">
-              <div className="flex items-center gap-2 font-mono font-bold">
+        {/* Static Dedicated Status Box (Never overlaps camera or jumps) */}
+        <div className="w-full h-12 mt-3 flex items-center justify-center">
+          {lastScanned ? (
+            <div className="w-full bg-teal-600 text-white px-4 py-2.5 rounded-2xl border border-teal-400 shadow-xl flex items-center justify-between text-xs transition-all">
+              <div className="flex items-center gap-2 font-mono font-bold truncate">
                 <Zap className="w-4 h-4 text-amber-300 shrink-0" />
-                <span>Transmitted: {lastScanned}</span>
+                <span className="truncate">Sent to Dashboard: {lastScanned}</span>
               </div>
-              <CheckCircle2 className="w-4.5 h-4.5 text-white shrink-0" />
+              <span className="px-2 py-0.5 rounded text-[10px] font-black bg-teal-800 text-white shrink-0">
+                ✓ SENT
+              </span>
             </div>
+          ) : (
+            <p className="text-[11px] text-slate-400 font-medium text-center">
+              📷 Point phone camera at any barcode to send to Dashboard
+            </p>
           )}
         </div>
       </div>
@@ -278,7 +285,7 @@ function RemoteScanClient() {
         <div className="flex gap-2">
           <input
             type="text"
-            placeholder="Type barcode on phone..."
+            placeholder="Type barcode to send to Dashboard..."
             value={manualCode}
             onChange={(e) => setManualCode(e.target.value)}
             onKeyDown={(e) => {
@@ -288,7 +295,7 @@ function RemoteScanClient() {
                 setManualCode("");
               }
             }}
-            className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-teal-500 font-medium"
+            className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-teal-500 font-medium"
           />
           <button
             type="button"
@@ -299,18 +306,18 @@ function RemoteScanClient() {
               }
             }}
             disabled={!manualCode.trim() || loading}
-            className="px-5 py-3 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50 active:scale-95 cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50 active:scale-95 cursor-pointer shadow-md"
           >
             {loading ? (
               <RefreshCw className="w-4 h-4 animate-spin text-white" />
             ) : (
               <Search className="w-4 h-4 text-white" />
             )}
-            <span>{loading ? "Sending..." : "Send"}</span>
+            <span>{loading ? "Sending..." : "Send to Dashboard"}</span>
           </button>
         </div>
 
-        <p className="text-[11px] text-slate-500 text-center font-medium">
+        <p className="text-[10px] text-slate-500 text-center font-medium">
           MedTrack Wireless Remote Scanner • Real-time POS Synchronization
         </p>
       </div>

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { medicines, batches, auditLogs } from "@/lib/db/schema";
+import { medicines, batches, auditLogs, shops } from "@/lib/db/schema";
 import { eq, and, sql, like } from "drizzle-orm";
+import { autoClassifySchedule } from "@/lib/scheduleClassifier";
 
 export async function GET() {
   const session = await getAuthSession();
@@ -22,7 +23,7 @@ export async function GET() {
         barcode: medicines.barcode,
         manufacturer: medicines.manufacturer,
         schedule: medicines.schedule,
-        unitPrice: medicines.unitPrice,
+        unitPrice: sql<number>`COALESCE(NULLIF(${medicines.unitPrice}, 0), MAX(${batches.costPrice}), 0)`,
         reorderThreshold: medicines.reorderThreshold,
         createdAt: medicines.createdAt,
         totalStock: sql<number>`COALESCE(SUM(${batches.quantity}), 0)`,
@@ -93,6 +94,19 @@ export async function POST(req: Request) {
       }
     }
 
+    // Ensure shop record exists for foreign key constraint safety
+    const [existingShop] = await db.select().from(shops).where(eq(shops.id, shopId));
+    if (!existingShop) {
+      await db.insert(shops).values({
+        id: shopId,
+        name: "Apex MedTrack Pharmacy",
+        address: "123 Health Ave",
+        phone: "+1-800-555-MEDS",
+      });
+    }
+
+    const autoSchedule = (schedule && schedule !== "OTC") ? schedule : autoClassifySchedule(name.trim());
+
     const [newMed] = await db
       .insert(medicines)
       .values({
@@ -100,7 +114,7 @@ export async function POST(req: Request) {
         name: name.trim(),
         manufacturer: manufacturer.trim(),
         barcode: trimmedBarcode,
-        schedule: schedule || "OTC",
+        schedule: autoSchedule,
         unitPrice: parseFloat(unitPrice) || 0,
         reorderThreshold: parseInt(reorderThreshold) || 10,
       })

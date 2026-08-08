@@ -47,8 +47,8 @@ export default function AuditExportsPage() {
     }
   };
 
-  const handleDownloadCsv = (type: "expiry" | "wastage" | "audit") => {
-    window.open(`/api/export?type=${type}`, "_blank");
+  const handleDownload = (type: "expiry" | "wastage" | "audit", format: "excel" | "csv" = "excel") => {
+    window.open(`/api/export?type=${type}&format=${format}`, "_blank");
   };
 
   if (accessDenied) {
@@ -59,7 +59,7 @@ export default function AuditExportsPage() {
         </div>
         <h2 className="text-xl font-extrabold text-[#1E3A5F]">Access Restricted</h2>
         <p className="text-xs text-slate-500 max-w-sm mx-auto font-medium">
-          Audit trails and CSV compliance exports are restricted to Pharmacy Owner accounts.
+          Audit trails and compliance exports are restricted to Pharmacy Owner accounts.
         </p>
       </div>
     );
@@ -72,15 +72,15 @@ export default function AuditExportsPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1E3A5F] tracking-tight flex items-center gap-3">
             <FileSpreadsheet className="w-8 h-8 text-amber-600" />
-            <span>Audit Trail & Drug Inspector CSV Exports</span>
+            <span>Audit Trail & Excel / CSV Exports</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-medium">
-            Immutable system activity log and 1-click Excel/Google Sheets compatible reports.
+            Immutable system activity log and 1-click formatted Excel spreadsheets for drug inspector compliance audits.
           </p>
         </div>
       </div>
 
-      {/* CSV Export Action Cards */}
+      {/* Export Action Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-4 flex flex-col justify-between shadow-xs">
           <div className="space-y-2">
@@ -92,13 +92,22 @@ export default function AuditExportsPage() {
               Full breakdown of all batches, expiry dates, remaining stock, days left, and alert classifications.
             </p>
           </div>
-          <button
-            onClick={() => handleDownloadCsv("expiry")}
-            className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-slate-950" />
-            <span>Download Expiry CSV</span>
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={() => handleDownload("expiry", "excel")}
+              className="w-full py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-white" />
+              <span>Download Excel (.xls)</span>
+            </button>
+            <button
+              onClick={() => handleDownload("expiry", "csv")}
+              className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] flex items-center justify-center gap-1.5 border border-slate-200 transition-all cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Download CSV (.csv)</span>
+            </button>
+          </div>
         </div>
 
         <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-4 flex flex-col justify-between shadow-xs">
@@ -106,18 +115,27 @@ export default function AuditExportsPage() {
             <span className="px-2.5 py-0.5 rounded text-[10px] font-extrabold bg-rose-50 text-rose-800 border border-rose-200">
               Write-Off Report
             </span>
-            <h3 className="text-lg font-extrabold text-[#1E3A5F]">Wastage Log CSV</h3>
+            <h3 className="text-lg font-extrabold text-[#1E3A5F]">Wastage Log</h3>
             <p className="text-xs text-slate-500 font-medium">
               Complete history of written-off medicines, quantities, reasons, user IDs, and timestamps.
             </p>
           </div>
-          <button
-            onClick={() => handleDownloadCsv("wastage")}
-            className="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-white" />
-            <span>Download Wastage CSV</span>
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={() => handleDownload("wastage", "excel")}
+              className="w-full py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-white" />
+              <span>Download Excel (.xls)</span>
+            </button>
+            <button
+              onClick={() => handleDownload("wastage", "csv")}
+              className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] flex items-center justify-center gap-1.5 border border-slate-200 transition-all cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Download CSV (.csv)</span>
+            </button>
+          </div>
         </div>
 
         <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-4 flex flex-col justify-between shadow-xs">
@@ -125,18 +143,27 @@ export default function AuditExportsPage() {
             <span className="px-2.5 py-0.5 rounded text-[10px] font-extrabold bg-teal-50 text-teal-800 border border-teal-200">
               Schedule H Compliance
             </span>
-            <h3 className="text-lg font-extrabold text-[#1E3A5F]">System Audit Trail CSV</h3>
+            <h3 className="text-lg font-extrabold text-[#1E3A5F]">System Audit Trail</h3>
             <p className="text-xs text-slate-500 font-medium">
               Complete dispensing log, stock-ins, registration, and status updates for drug inspector visits.
             </p>
           </div>
-          <button
-            onClick={() => handleDownloadCsv("audit")}
-            className="w-full py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-white" />
-            <span>Download Audit CSV</span>
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={() => handleDownload("audit", "excel")}
+              className="w-full py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-white" />
+              <span>Download Excel (.xls)</span>
+            </button>
+            <button
+              onClick={() => handleDownload("audit", "csv")}
+              className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] flex items-center justify-center gap-1.5 border border-slate-200 transition-all cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Download CSV (.csv)</span>
+            </button>
+          </div>
         </div>
       </div>
 

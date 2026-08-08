@@ -90,7 +90,9 @@ export async function initDatabase() {
       `CREATE INDEX IF NOT EXISTS idx_medicines_barcode ON medicines(shop_id, barcode);`,
       `CREATE INDEX IF NOT EXISTS idx_batches_shop ON batches(shop_id);`,
       `CREATE INDEX IF NOT EXISTS idx_batches_expiry ON batches(medicine_id, expiry_date);`,
-      `CREATE INDEX IF NOT EXISTS idx_audit_shop ON audit_logs(shop_id);`
+      `CREATE INDEX IF NOT EXISTS idx_audit_shop ON audit_logs(shop_id);`,
+      `INSERT OR IGNORE INTO shops (id, name, address, phone) VALUES (1, 'Apex MedTrack Pharmacy', '123 Health Ave', '+1-800-555-MEDS');`,
+      `INSERT OR IGNORE INTO users (id, shop_id, name, email, password_hash, role) VALUES (1, 1, 'Pharmacy Admin', 'admin@medtrack.com', '$2a$12$DummyHashForDemoUserOnly1234567890', 'owner');`
     ], "write");
 
     return { success: true, message: "Database schema initialized with WAL and Foreign Keys." };

@@ -29,7 +29,7 @@ export default function Navbar() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerMode, setScannerMode] = useState<"check" | "stockIn">("check");
 
-  if (!session) return null;
+  if (!session || pathname === "/login" || pathname === "/register" || pathname?.startsWith("/remote-scan")) return null;
 
   const isOwner = session.user.role === "owner";
 

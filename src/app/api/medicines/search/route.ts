@@ -29,7 +29,7 @@ export async function GET(req: Request) {
         barcode: medicines.barcode,
         manufacturer: medicines.manufacturer,
         schedule: medicines.schedule,
-        unitPrice: medicines.unitPrice,
+        unitPrice: sql<number>`COALESCE(NULLIF(${medicines.unitPrice}, 0), MAX(${batches.costPrice}), 0)`,
         reorderThreshold: medicines.reorderThreshold,
         totalStock: sql<number>`COALESCE(SUM(${batches.quantity}), 0)`,
       })

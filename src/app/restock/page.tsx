@@ -42,6 +42,20 @@ export default function RestockOrdersPage() {
     }
   }, [status, router]);
 
+  useEffect(() => {
+    if (createOrderOpen) {
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    };
+  }, [createOrderOpen]);
+
   const fetchRestockData = async () => {
     setLoading(true);
     try {
@@ -339,14 +353,36 @@ export default function RestockOrdersPage() {
                   onChange={(e) => setNewOrderData({ ...newOrderData, medicineId: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 focus:border-teal-600 font-semibold"
                 >
-                  <option value="">-- Choose Medicine --</option>
+                  <option value="">-- Choose Stock Medicine --</option>
                   {medicinesList.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} ({m.manufacturer})
+                      {m.name} • {m.manufacturer} (Schedule {m.schedule})
                     </option>
                   ))}
                 </select>
               </div>
+
+              {/* Auto-Filled Medicine Details Summary Card */}
+              {(() => {
+                const selectedMed = medicinesList.find((m) => m.id.toString() === newOrderData.medicineId);
+                if (!selectedMed) return null;
+                return (
+                  <div className="p-3 rounded-2xl bg-teal-50 border border-teal-200 text-xs space-y-1.5 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-[#1E3A5F] text-sm">{selectedMed.name}</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-teal-100 text-teal-900 border border-teal-300">
+                        ✓ Auto-Filled Details
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-600 font-medium pt-1 border-t border-teal-200/60">
+                      <p>Manufacturer: <strong className="text-slate-800">{selectedMed.manufacturer}</strong></p>
+                      <p>Schedule: <strong className="text-slate-800">Schedule {selectedMed.schedule}</strong></p>
+                      <p>Barcode: <strong className="text-slate-800">{selectedMed.barcode || "Manual Non-Barcoded"}</strong></p>
+                      <p>Unit Price: <strong className="text-teal-800">₹{selectedMed.unitPrice || "N/A"}</strong></p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="block text-slate-700 font-bold mb-1">Expected Quantity *</label>
@@ -373,15 +409,31 @@ export default function RestockOrdersPage() {
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">Distributor / Supplier Name *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-slate-700 font-bold">Distributor / Supplier Name *</label>
+                  <span className="text-[10px] text-teal-800 font-medium bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
+                    Can vary per batch/order
+                  </span>
+                </div>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Sun Pharma Wholesaler"
+                  list="supplier-suggestions"
+                  placeholder="e.g. Sun Pharma Wholesaler, Cipla Distributor..."
                   value={newOrderData.supplier}
                   onChange={(e) => setNewOrderData({ ...newOrderData, supplier: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 focus:border-teal-600 font-medium"
                 />
+                <datalist id="supplier-suggestions">
+                  <option value="Sun Pharma Wholesaler" />
+                  <option value="Cipla Healthcare Wholesaler" />
+                  <option value="Apex Pharma Distributors" />
+                  <option value="Apollo Wholesale Agency" />
+                  <option value="MedPlus Regional Distribution" />
+                </datalist>
+                <p className="text-[10px] text-slate-500 font-medium mt-1">
+                  ℹ️ Different batches of the same medicine can be purchased from different suppliers anytime.
+                </p>
               </div>
 
               <button

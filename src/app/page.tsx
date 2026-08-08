@@ -48,6 +48,16 @@ export default function DashboardPage() {
     }
   }, [status, router]);
 
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchDashboardData();
+    };
+    window.addEventListener("medtrack:refresh", handleRefresh);
+    return () => {
+      window.removeEventListener("medtrack:refresh", handleRefresh);
+    };
+  }, []);
+
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
@@ -86,6 +96,10 @@ export default function DashboardPage() {
       setLoading(false);
     }
   };
+
+  if (status === "unauthenticated") {
+    return null;
+  }
 
   if (status === "loading" || loading) {
     return (
