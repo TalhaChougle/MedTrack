@@ -4,12 +4,14 @@ import { db } from "@/lib/db";
 import { medicines, batches, auditLogs, shops } from "@/lib/db/schema";
 import { eq, and, sql, like } from "drizzle-orm";
 import { autoClassifySchedule } from "@/lib/scheduleClassifier";
+import { syncAndRestoreDatabase, persistCurrentDatabaseState } from "@/lib/db/storeSync";
 
 export async function GET() {
   const session = await getAuthSession();
   const shopId = session?.user?.shopId || 1;
 
   try {
+    await syncAndRestoreDatabase();
     // Select medicines and calculate total stock & batch count per medicine
     const medList = await db
       .select({

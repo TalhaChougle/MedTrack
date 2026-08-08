@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { medicines, batches, auditLogs, shops, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { autoClassifySchedule } from "@/lib/scheduleClassifier";
+import { persistCurrentDatabaseState, syncAndRestoreDatabase } from "@/lib/db/storeSync";
 
 function suggestNextBatchNumber(batchNumbers: string[]): string {
   let maxNum = 0;
@@ -312,6 +313,8 @@ export async function PUT(req: Request) {
         receivedDate: todayStr,
       })
       .returning();
+
+    await persistCurrentDatabaseState();
 
     return NextResponse.json({ success: true, medicine: med, batch: newBatch });
   } catch (error: unknown) {
