@@ -28,13 +28,33 @@ interface BarcodeScannerModalProps {
   onSelectMode: (mode: "check" | "stockIn") => void;
 }
 
+const checkIsMobileDevice = () => {
+  if (typeof window === "undefined") return false;
+  const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera || "";
+  const isTouchScreen = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+  const isMobileScreen = window.innerWidth < 768;
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  return (isMobileUA || isMobileScreen) && isTouchScreen;
+};
+
 export default function BarcodeScannerModal({
   mode,
   onClose,
   onSelectMode,
 }: BarcodeScannerModalProps) {
-  // Input source choice: "camera" (Device Camera), "wired" (USB Cable), "wireless_dongle" (2.4GHz/BT Gun), "phone" (QR Pair), "manual" (Type)
-  const [inputSource, setInputSource] = useState<"camera" | "wired" | "wireless_dongle" | "phone" | "manual">("camera");
+  const [isMobile, setIsMobile] = useState(false);
+  // Default to "wired" USB scanner on Desktop PC, "camera" on Mobile Phone/Tablet
+  const [inputSource, setInputSource] = useState<"camera" | "wired" | "wireless_dongle" | "phone" | "manual">("wired");
+
+  useEffect(() => {
+    const mobile = checkIsMobileDevice();
+    setIsMobile(mobile);
+    if (mobile) {
+      setInputSource("camera");
+    } else {
+      setInputSource("wired");
+    }
+  }, []);
 
   const [manualCode, setManualCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -660,71 +680,116 @@ export default function BarcodeScannerModal({
             <label className="text-xs font-extrabold text-[#1E3A5F] uppercase tracking-wider block">
               Choose Scanner Input Device:
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setInputSource("camera")}
-                className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  inputSource === "camera"
-                    ? "bg-white text-emerald-700 shadow-xs border border-slate-200 font-extrabold"
-                    : "text-slate-600 hover:bg-white/60"
-                }`}
-              >
-                <Camera className="w-3.5 h-3.5 text-emerald-600" />
-                <span>📷 Camera</span>
-              </button>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+              {isMobile ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setInputSource("camera")}
+                    className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      inputSource === "camera"
+                        ? "bg-white text-emerald-700 shadow-xs border border-slate-200 font-extrabold"
+                        : "text-slate-600 hover:bg-white/60"
+                    }`}
+                  >
+                    <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>📷 Phone Camera</span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => setInputSource("wired")}
-                className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  inputSource === "wired"
-                    ? "bg-white text-[#1E3A5F] shadow-xs border border-slate-200 font-extrabold"
-                    : "text-slate-600 hover:bg-white/60"
-                }`}
-              >
-                <Usb className="w-3.5 h-3.5 text-blue-600" />
-                <span>🔌 Wired USB</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => setInputSource("manual")}
+                    className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      inputSource === "manual"
+                        ? "bg-white text-slate-800 shadow-xs border border-slate-200 font-extrabold"
+                        : "text-slate-600 hover:bg-white/60"
+                    }`}
+                  >
+                    <Keyboard className="w-3.5 h-3.5 text-slate-500" />
+                    <span>⌨️ Manual</span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => setInputSource("wireless_dongle")}
-                className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  inputSource === "wireless_dongle"
-                    ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-extrabold"
-                    : "text-slate-600 hover:bg-white/60"
-                }`}
-              >
-                <Radio className="w-3.5 h-3.5 text-indigo-600" />
-                <span>📡 Wireless 2.4G/BT</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => setInputSource("wired")}
+                    className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      inputSource === "wired"
+                        ? "bg-white text-[#1E3A5F] shadow-xs border border-slate-200 font-extrabold"
+                        : "text-slate-600 hover:bg-white/60"
+                    }`}
+                  >
+                    <Usb className="w-3.5 h-3.5 text-blue-600" />
+                    <span>🔌 Wired USB</span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => setInputSource("phone")}
-                className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  inputSource === "phone"
-                    ? "bg-white text-teal-700 shadow-xs border border-slate-200 font-extrabold"
-                    : "text-slate-600 hover:bg-white/60"
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5 text-teal-600" />
-                <span>📱 Pair Phone</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => setInputSource("phone")}
+                    className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      inputSource === "phone"
+                        ? "bg-white text-teal-700 shadow-xs border border-slate-200 font-extrabold"
+                        : "text-slate-600 hover:bg-white/60"
+                    }`}
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-teal-600" />
+                    <span>📱 Remote Pair</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setInputSource("wired")}
+                    className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      inputSource === "wired"
+                        ? "bg-white text-[#1E3A5F] shadow-xs border border-slate-200 font-extrabold"
+                        : "text-slate-600 hover:bg-white/60"
+                    }`}
+                  >
+                    <Usb className="w-3.5 h-3.5 text-blue-600" />
+                    <span>🔌 Wired USB</span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => setInputSource("manual")}
-                className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  inputSource === "manual"
-                    ? "bg-white text-slate-800 shadow-xs border border-slate-200 font-extrabold"
-                    : "text-slate-600 hover:bg-white/60"
-                }`}
-              >
-                <Keyboard className="w-3.5 h-3.5 text-slate-500" />
-                <span>⌨️ Manual</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => setInputSource("wireless_dongle")}
+                    className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      inputSource === "wireless_dongle"
+                        ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-extrabold"
+                        : "text-slate-600 hover:bg-white/60"
+                    }`}
+                  >
+                    <Radio className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>📡 Wireless 2.4G/BT</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setInputSource("phone")}
+                    className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      inputSource === "phone"
+                        ? "bg-white text-teal-700 shadow-xs border border-slate-200 font-extrabold"
+                        : "text-slate-600 hover:bg-white/60"
+                    }`}
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-teal-600" />
+                    <span>📱 Pair Phone (QR)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setInputSource("manual")}
+                    className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      inputSource === "manual"
+                        ? "bg-white text-slate-800 shadow-xs border border-slate-200 font-extrabold"
+                        : "text-slate-600 hover:bg-white/60"
+                    }`}
+                  >
+                    <Keyboard className="w-3.5 h-3.5 text-slate-500" />
+                    <span>⌨️ Manual</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
