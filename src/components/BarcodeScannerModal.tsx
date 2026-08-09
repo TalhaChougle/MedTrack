@@ -1287,12 +1287,32 @@ export default function BarcodeScannerModal({
             </div>
 
             <form onSubmit={handleStockInSubmit} className="space-y-4">
-              <div className="p-3.5 rounded-2xl bg-teal-50 border border-teal-200 space-y-1.5 text-xs">
+              <div className="p-3.5 rounded-2xl bg-teal-50 border border-teal-200 space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-teal-800 bg-teal-100 px-2 py-0.5 rounded border border-teal-200">
                     {stockInMedicine.isNew ? "✨ New Medicine Entry" : "✓ Existing Stock Medicine"}
                   </span>
                 </div>
+
+                {/* Editable Product Barcode Input Field */}
+                <div>
+                  <label className="block text-[#1E3A5F] font-extrabold text-xs mb-1">
+                    Scanned Product Barcode (EAN / UPC / Code128) *
+                  </label>
+                  <input
+                    type="text"
+                    value={stockInMedicine.barcode || ""}
+                    onChange={(e) => {
+                      setStockInMedicine({
+                        ...stockInMedicine,
+                        barcode: e.target.value.trim(),
+                      });
+                    }}
+                    placeholder="e.g. 8901296060667"
+                    className="w-full bg-white border border-teal-300 rounded-lg px-3 py-1.5 text-slate-800 font-mono font-bold text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+
                 <div>
                   {stockInMedicine.isNew ? (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
