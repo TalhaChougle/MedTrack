@@ -201,7 +201,6 @@ function RemoteScanClient() {
 
       const config = {
         fps: 30,
-        qrbox: { width: 280, height: 180 },
         videoConstraints: {
           facingMode: "environment",
           width: { ideal: 1920, min: 1280 },
