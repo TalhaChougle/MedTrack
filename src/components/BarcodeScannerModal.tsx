@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { Html5Qrcode } from "html5-qrcode";
 import {
   X,
   QrCode,
@@ -17,6 +18,7 @@ import {
   Wifi,
   Radio,
   Printer,
+  Camera,
 } from "lucide-react";
 import { autoClassifySchedule } from "@/lib/scheduleClassifier";
 
@@ -31,8 +33,8 @@ export default function BarcodeScannerModal({
   onClose,
   onSelectMode,
 }: BarcodeScannerModalProps) {
-  // Input source choice: "wired" (USB Cable), "wireless_dongle" (2.4GHz/BT Gun), "phone" (QR Pair), "manual" (Type)
-  const [inputSource, setInputSource] = useState<"wired" | "wireless_dongle" | "phone" | "manual">("wired");
+  // Input source choice: "camera" (Device Camera), "wired" (USB Cable), "wireless_dongle" (2.4GHz/BT Gun), "phone" (QR Pair), "manual" (Type)
+  const [inputSource, setInputSource] = useState<"camera" | "wired" | "wireless_dongle" | "phone" | "manual">("camera");
 
   const [manualCode, setManualCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -115,6 +117,110 @@ export default function BarcodeScannerModal({
     } else if (inputSource === "manual") {
       manualInputRef.current?.focus();
     }
+  }, [inputSource]);
+
+  // Direct Device Camera Scanner Engine
+  const cameraScannerRef = useRef<Html5Qrcode | null>(null);
+  const cameraActiveRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (inputSource !== "camera") {
+      if (cameraScannerRef.current && cameraActiveRef.current) {
+        cameraScannerRef.current
+          .stop()
+          .catch(() => {})
+          .then(() => {
+            cameraScannerRef.current = null;
+            cameraActiveRef.current = false;
+          });
+      }
+      return;
+    }
+
+    let isMounted = true;
+    const startCameraScanner = async () => {
+      try {
+        const container = document.getElementById("direct-device-camera-reader");
+        if (container) container.innerHTML = "";
+
+        const html5Qrcode = new Html5Qrcode("direct-device-camera-reader");
+        cameraScannerRef.current = html5Qrcode;
+
+        const config = {
+          fps: 20,
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
+            width: Math.min(viewfinderWidth - 10, Math.floor(viewfinderWidth * 0.90)),
+            height: Math.min(viewfinderHeight - 10, Math.floor(viewfinderHeight * 0.60)),
+          }),
+        };
+
+        const cameras = await Html5Qrcode.getCameras().catch(() => []);
+        if (!isMounted) return;
+
+        if (cameras && cameras.length > 0) {
+          const backCam = cameras.find(
+            (c) =>
+              c.label.toLowerCase().includes("back") ||
+              c.label.toLowerCase().includes("rear") ||
+              c.label.toLowerCase().includes("environment")
+          );
+          const camId = backCam ? backCam.id : cameras[0].id;
+          await html5Qrcode
+            .start(
+              camId,
+              config,
+              (scannedText) => {
+                if (scannedText) {
+                  if (typeof window !== "undefined" && "vibrate" in navigator) {
+                    try { navigator.vibrate(100); } catch (e) {}
+                  }
+                  handleBarcodeScanned(scannedText);
+                }
+              },
+              () => {}
+            )
+            .catch(() => {});
+          if (isMounted) cameraActiveRef.current = true;
+        } else {
+          await html5Qrcode
+            .start(
+              { facingMode: "environment" },
+              config,
+              (scannedText) => {
+                if (scannedText) {
+                  if (typeof window !== "undefined" && "vibrate" in navigator) {
+                    try { navigator.vibrate(100); } catch (e) {}
+                  }
+                  handleBarcodeScanned(scannedText);
+                }
+              },
+              () => {}
+            )
+            .catch(() => {});
+          if (isMounted) cameraActiveRef.current = true;
+        }
+      } catch (err) {
+        console.warn("Direct camera scanner init warning:", err);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      startCameraScanner();
+    }, 200);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+      if (cameraScannerRef.current && cameraActiveRef.current) {
+        cameraScannerRef.current
+          .stop()
+          .catch(() => {})
+          .then(() => {
+            cameraScannerRef.current = null;
+            cameraActiveRef.current = false;
+          });
+      }
+    };
   }, [inputSource]);
 
   const playBeep = () => {
@@ -554,7 +660,20 @@ export default function BarcodeScannerModal({
             <label className="text-xs font-extrabold text-[#1E3A5F] uppercase tracking-wider block">
               Choose Scanner Input Device:
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setInputSource("camera")}
+                className={`py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  inputSource === "camera"
+                    ? "bg-white text-emerald-700 shadow-xs border border-slate-200 font-extrabold"
+                    : "text-slate-600 hover:bg-white/60"
+                }`}
+              >
+                <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                <span>📷 Camera</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setInputSource("wired")}
@@ -591,7 +710,7 @@ export default function BarcodeScannerModal({
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5 text-teal-600" />
-                <span>📱 Phone (QR)</span>
+                <span>📱 Pair Phone</span>
               </button>
 
               <button
@@ -608,6 +727,28 @@ export default function BarcodeScannerModal({
               </button>
             </div>
           </div>
+
+          {/* Device Option 0: Direct Device Camera Scanner */}
+          {inputSource === "camera" && (
+            <div className="p-4 rounded-3xl bg-[#0F172A] border border-slate-800 text-white space-y-3 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                  <span className="text-xs font-bold text-emerald-400">Live Device Camera Active</span>
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium">Point camera at medicine barcode</span>
+              </div>
+
+              <div className="relative rounded-2xl overflow-hidden bg-black aspect-4/3 flex items-center justify-center border border-slate-700 shadow-inner">
+                <div id="direct-device-camera-reader" className="w-full h-full" />
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                <span>⚡ Auto-detects 1D, EAN-13, GS1 & 2D barcodes</span>
+                <span className="text-emerald-400 font-bold">Touchless Instant Scan</span>
+              </div>
+            </div>
+          )}
 
           {/* Device Option 1: Wired USB Cable Scanner */}
           {inputSource === "wired" && (
