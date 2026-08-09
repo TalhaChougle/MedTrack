@@ -62,30 +62,9 @@ export async function persistCurrentDatabaseState() {
 
 export async function syncAndRestoreDatabase() {
   try {
-    const existingMeds = await db.select().from(medicines);
-    if (existingMeds && existingMeds.length > 0) {
-      await persistCurrentDatabaseState();
-      return;
-    }
-
-    const snapshot = loadSnapshotFromDisk();
-    if (!snapshot || !snapshot.medicines || snapshot.medicines.length === 0) {
-      return;
-    }
-
-    for (const m of snapshot.medicines) {
-      await db.insert(medicines).values(m).onConflictDoNothing();
-    }
-    for (const b of snapshot.batches) {
-      await db.insert(batches).values(b).onConflictDoNothing();
-    }
-    for (const w of snapshot.wastageLogs || []) {
-      await db.insert(wastageLogs).values(w).onConflictDoNothing();
-    }
-    for (const a of snapshot.auditLogs || []) {
-      await db.insert(auditLogs).values(a).onConflictDoNothing();
-    }
+    // Keep in-memory cache aligned with database state without resurrecting deleted records
+    await persistCurrentDatabaseState();
   } catch (e) {
-    console.warn("Database sync restore error:", e);
+    console.warn("Database sync error:", e);
   }
 }

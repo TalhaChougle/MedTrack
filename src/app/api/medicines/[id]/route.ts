@@ -3,6 +3,7 @@ import { getAuthSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { medicines, batches, auditLogs, incomingOrders, wastageLogs } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { persistCurrentDatabaseState } from "@/lib/db/storeSync";
 
 export async function DELETE(
   req: Request,
@@ -41,7 +42,10 @@ export async function DELETE(
     // 3. Delete primary medicine record
     await db.delete(medicines).where(and(eq(medicines.id, medId), eq(medicines.shopId, shopId)));
 
-    // 4. Audit Log
+    // 4. Immediately sync memory cache & snapshot
+    await persistCurrentDatabaseState();
+
+    // 5. Audit Log
     await db.insert(auditLogs).values({
       shopId,
       userId,
