@@ -18,7 +18,7 @@ export async function GET(
   const decodedCode = decodeURIComponent(code).trim();
 
   try {
-    const medList = await db
+    let medList = await db
       .select()
       .from(medicines)
       .where(
@@ -27,6 +27,19 @@ export async function GET(
           eq(medicines.barcode, decodedCode)
         )
       );
+
+    if (medList.length === 0) {
+      const searchPattern = `%${decodedCode}%`;
+      medList = await db
+        .select()
+        .from(medicines)
+        .where(
+          and(
+            eq(medicines.shopId, shopId),
+            sql`(${medicines.barcode} LIKE ${searchPattern} OR ${medicines.name} LIKE ${searchPattern})`
+          )
+        );
+    }
 
     const med = medList[0];
 

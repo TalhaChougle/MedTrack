@@ -276,6 +276,11 @@ export default function BarcodeScannerModal({
     const clean = rawCode.trim();
     if (!clean) return { barcode: "" };
 
+    // Standard 1D numeric barcodes (EAN-13, EAN-8, UPC-A, Code128 without GS1 AI tags)
+    if (/^\d{8,14}$/.test(clean)) {
+      return { barcode: clean };
+    }
+
     let barcode = clean;
     let batchNumber: string | undefined = undefined;
     let expiryDate: string | undefined = undefined;
@@ -300,22 +305,29 @@ export default function BarcodeScannerModal({
       return { barcode, batchNumber, expiryDate };
     }
 
-    // 2. Check GS1 AI string formats e.g. 01089012960606671726123110BATCH123
-    const expMatch2 = clean.match(/17(\d{6})/);
-    if (expMatch2) {
-      const yy = expMatch2[1].slice(0, 2);
-      const mm = expMatch2[1].slice(2, 4);
-      const dd = expMatch2[1].slice(4, 6);
-      const year = parseInt(yy) > 50 ? `19${yy}` : `20${yy}`;
-      expiryDate = `${year}-${mm}-${dd}`;
+    // 2. Check GS1 AI DataMatrix formats (starts with 01 and length >= 18)
+    if (clean.startsWith("01") && clean.length >= 18) {
+      const gtinMatch = clean.match(/^01(\d{14})/);
+      if (gtinMatch) barcode = gtinMatch[1];
+
+      const expMatch2 = clean.match(/17(\d{6})/);
+      if (expMatch2) {
+        const yy = expMatch2[1].slice(0, 2);
+        const mm = expMatch2[1].slice(2, 4);
+        const dd = expMatch2[1].slice(4, 6);
+        const year = parseInt(yy) > 50 ? `19${yy}` : `20${yy}`;
+        expiryDate = `${year}-${mm}-${dd}`;
+      }
+
+      const batchMatch2 = clean.match(/10([A-Za-z0-9_-]{3,15})/);
+      if (batchMatch2) {
+        batchNumber = batchMatch2[1];
+      }
+
+      return { barcode, batchNumber, expiryDate };
     }
 
-    const batchMatch2 = clean.match(/10([A-Za-z0-9_-]{3,15})/);
-    if (batchMatch2) {
-      batchNumber = batchMatch2[1];
-    }
-
-    return { barcode, batchNumber, expiryDate };
+    return { barcode: clean };
   };
 
   // Barcode scanned event handler with GS1 Batch/Expiry parsing
