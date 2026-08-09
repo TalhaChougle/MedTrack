@@ -388,41 +388,6 @@ export default function BarcodeScannerModal({
 
   const lastSeenTimestampRef = useRef<number>(0);
 
-  const handleRemoteAutoStockIn = async (scannedCode: string) => {
-    const parsed = parsePharmaceuticalBarcode(scannedCode);
-    const code = parsed.barcode || scannedCode.trim();
-    if (!code) return;
-
-    playBeep();
-    setPhonePaired(true);
-
-    try {
-      const res = await fetch("/api/batches/by-code", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          barcode: code,
-          batchNumber: parsed.batchNumber,
-          expiryDate: parsed.expiryDate,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setSuccessMsg(`⚡ Mobile Delivery Received: Auto-Stocked Batch ${data.batch.batchNumber} (${data.batch.quantity} units) for ${data.medicine.name}!`);
-      }
-    } catch (e) {
-      console.error("Remote auto stock error:", e);
-    } finally {
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("medtrack:refresh"));
-      }
-      setTimeout(() => {
-        onClose();
-      }, 600);
-    }
-  };
-
   // Real-time Instant SSE Stream Listener for phone pairing & remote scans
   useEffect(() => {
     if (inputSource !== "phone" || !phoneSessionId) return;
@@ -445,7 +410,8 @@ export default function BarcodeScannerModal({
           if (message === "PAIRED") {
             setPhonePaired(true);
           } else if (message.length > 0) {
-            handleRemoteAutoStockIn(message);
+            setPhonePaired(true);
+            handleBarcodeScanned(message);
           }
         } catch (e) {}
       };
@@ -462,7 +428,7 @@ export default function BarcodeScannerModal({
           if (data.paired) setPhonePaired(true);
           if (data.newScan && data.newScan.timestamp > lastSeenTimestampRef.current) {
             lastSeenTimestampRef.current = data.newScan.timestamp;
-            handleRemoteAutoStockIn(data.newScan.barcode);
+            handleBarcodeScanned(data.newScan.barcode);
           }
         }
       } catch (e) {}
@@ -472,7 +438,7 @@ export default function BarcodeScannerModal({
       if (eventSource) eventSource.close();
       if (fallbackInterval) clearInterval(fallbackInterval);
     };
-  }, [inputSource, phoneSessionId]);
+  }, [inputSource, phoneSessionId, mode]);
 
   // 🔌 📡 Hardware Scanner Listener for Wired USB & Wireless 2.4GHz / Bluetooth Guns
   useEffect(() => {
@@ -1075,15 +1041,16 @@ export default function BarcodeScannerModal({
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 mb-1 font-bold">2. Quantity Received * (Manual)</label>
+                  <label className="block text-slate-700 mb-1 font-bold">2. Quantity Received * (Units)</label>
                   <input
+                    id="stock-in-quantity-input"
                     type="number"
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
-                    placeholder="e.g. 100"
+                    placeholder="Enter units e.g. 50"
                     min="1"
                     required
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:border-teal-600 font-medium"
+                    className="w-full bg-white border-2 border-teal-400 rounded-xl px-3 py-2 text-slate-900 focus:border-teal-600 font-extrabold shadow-2xs"
                   />
                 </div>
 
