@@ -170,14 +170,14 @@ export default function BarcodeScannerModal({
 
       const config = {
         fps: 30,
-        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
-          width: Math.min(viewfinderWidth - 10, Math.floor(viewfinderWidth * 0.88)),
-          height: Math.min(viewfinderHeight - 10, Math.floor(viewfinderHeight * 0.65)),
-        }),
+        qrbox: { width: 280, height: 180 },
         videoConstraints: {
           facingMode: "environment",
           width: { ideal: 1920, min: 1280 },
           height: { ideal: 1080, min: 720 },
+        },
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true,
         },
       };
 
@@ -352,8 +352,16 @@ export default function BarcodeScannerModal({
   };
 
   function isValidEAN13(code: string): boolean {
-    if (!/^\d{13}$/.test(code)) return true;
-    const digits = code.split("").map(Number);
+    const clean = code.trim();
+    if (!/^\d{13}$/.test(clean)) return true;
+
+    // Reject unassigned 990-999 noise distortion prefixes from blurry camera frames
+    const prefix3 = parseInt(clean.slice(0, 3));
+    if (prefix3 >= 990 && prefix3 <= 999) {
+      return false;
+    }
+
+    const digits = clean.split("").map(Number);
     const checkDigit = digits.pop()!;
     const sum = digits.reduce((acc, digit, idx) => {
       return acc + digit * (idx % 2 === 0 ? 1 : 3);
