@@ -13,6 +13,7 @@ import {
   ChevronRight,
   CheckCircle2,
   X,
+  Trash2,
 } from "lucide-react";
 import { autoClassifySchedule } from "@/lib/scheduleClassifier";
 
@@ -27,6 +28,10 @@ export default function InventoryPage() {
   const [scheduleFilter, setScheduleFilter] = useState("ALL");
 
   const [expandedMedId, setExpandedMedId] = useState<number | null>(null);
+
+  // Delete Confirm Modal State
+  const [deleteConfirmMed, setDeleteConfirmMed] = useState<any>(null);
+  const [deleteConfirmBatch, setDeleteConfirmBatch] = useState<any>(null);
 
   // Add Medicine Modal State
   const [addMedOpen, setAddMedOpen] = useState(false);
@@ -90,6 +95,56 @@ export default function InventoryPage() {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Delete Medicine Handler
+  const handleDeleteMedicine = async (medId: number) => {
+    setActionLoading(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+    try {
+      const res = await fetch(`/api/medicines/${medId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMsg(data.error || "Failed to delete medicine.");
+      } else {
+        setSuccessMsg(data.message || "Medicine deleted successfully.");
+        setDeleteConfirmMed(null);
+        fetchInventoryData();
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("medtrack:refresh"));
+        }
+      }
+    } catch (err: any) {
+      setErrorMsg("Error connecting to server to delete medicine.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Delete Batch Handler
+  const handleDeleteBatch = async (batchId: number) => {
+    setActionLoading(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+    try {
+      const res = await fetch(`/api/batches/${batchId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMsg(data.error || "Failed to delete batch.");
+      } else {
+        setSuccessMsg(data.message || "Batch deleted successfully.");
+        setDeleteConfirmBatch(null);
+        fetchInventoryData();
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("medtrack:refresh"));
+        }
+      }
+    } catch (err: any) {
+      setErrorMsg("Error connecting to server to delete batch.");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -335,20 +390,33 @@ export default function InventoryPage() {
                       </span>
                     </div>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedMedForBatch(med);
-                        setErrorMsg("");
-                        setAddBatchOpen(true);
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-teal-800 text-xs font-bold border border-slate-200 flex items-center gap-1 cursor-pointer"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5 text-teal-600" />
-                      <span>Add Batch</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedMedForBatch(med);
+                          setErrorMsg("");
+                          setAddBatchOpen(true);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-teal-800 text-xs font-bold border border-slate-200 flex items-center gap-1 cursor-pointer"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5 text-teal-600" />
+                        <span>Add Batch</span>
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteConfirmMed(med);
+                        }}
+                        className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 text-xs font-bold border border-rose-200 flex items-center gap-1 cursor-pointer transition-colors"
+                        title="Delete Medicine & Batches"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        <span className="hidden sm:inline">Delete</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
 
                 {/* Expanded Batches Drawer */}
                 {isExpanded && (
@@ -398,7 +466,20 @@ export default function InventoryPage() {
                                   </span>
                                 </p>
                                 <p>Supplier: {b.supplier}</p>
-                                <p>Cost Price: ₹{b.costPrice}/unit</p>
+                                <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                                  <p>Cost Price: ₹{b.costPrice}/unit</p>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteConfirmBatch({ ...b, medicineName: med.name });
+                                    }}
+                                    className="text-rose-600 hover:text-rose-800 text-[11px] font-bold flex items-center gap-1 hover:underline cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3 h-3 text-rose-500" />
+                                    <span>Delete Batch</span>
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           );
@@ -662,6 +743,90 @@ export default function InventoryPage() {
                 Confirm Batch Addition
               </button>
             </form>
+          </div>
+      {/* Modal: Delete Medicine Confirmation */}
+      {deleteConfirmMed && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2 text-rose-700">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+                <h3 className="text-base font-extrabold">Confirm Delete Medicine</h3>
+              </div>
+              <button onClick={() => setDeleteConfirmMed(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs space-y-2">
+              <p className="font-bold text-sm">Are you sure you want to delete '{deleteConfirmMed.name}'?</p>
+              <p className="text-rose-700">
+                This will permanently remove this medicine and all its active stock batches ({deleteConfirmMed.batchCount || 0} batches, {deleteConfirmMed.totalStock || 0} total units) from your database.
+              </p>
+              <p className="font-extrabold text-[11px] text-rose-800 uppercase tracking-wide">⚡ This action cannot be undone.</p>
+            </div>
+
+            <div className="flex justify-end gap-3 text-xs font-bold pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmMed(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => handleDeleteMedicine(deleteConfirmMed.id)}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{actionLoading ? "Deleting..." : "Delete Medicine"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete Batch Confirmation */}
+      {deleteConfirmBatch && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2 text-rose-700">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+                <h3 className="text-base font-extrabold">Confirm Delete Batch</h3>
+              </div>
+              <button onClick={() => setDeleteConfirmBatch(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs space-y-2">
+              <p className="font-bold text-sm">Delete Batch '{deleteConfirmBatch.batchNumber}'?</p>
+              <p className="text-rose-700">
+                This will delete Batch '{deleteConfirmBatch.batchNumber}' ({deleteConfirmBatch.quantity} units) for {deleteConfirmBatch.medicineName} from your database.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 text-xs font-bold pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmBatch(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => handleDeleteBatch(deleteConfirmBatch.id)}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{actionLoading ? "Deleting..." : "Delete Batch"}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
