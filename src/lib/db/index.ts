@@ -13,8 +13,20 @@ const getDatabaseUrl = () => {
   return "file:medtrack.db";
 };
 
+const dbUrl = getDatabaseUrl();
+const authToken = process.env.DATABASE_AUTH_TOKEN || undefined;
+
 export const client = createClient({
-  url: getDatabaseUrl(),
+  url: dbUrl,
+  ...(authToken ? { authToken } : {}),
 });
 
 export const db = drizzle(client, { schema });
+
+export function getDatabaseConnectionType(): { isTurso: boolean; url: string } {
+  return {
+    isTurso: dbUrl.startsWith("libsql://") || dbUrl.startsWith("https://"),
+    url: dbUrl.startsWith("file:") ? dbUrl : dbUrl.replace(/\/\/[^@]+@/, "//***@"),
+  };
+}
+

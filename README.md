@@ -1,36 +1,108 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MedTrack Pharmacy Management System 🏥
 
-## Getting Started
+A modern, full-stack pharmacy inventory, expiry compliance, barcode scanner, and audit management application built with **Next.js**, **React 19**, **Drizzle ORM**, and **Turso / LibSQL (SQLite)**.
 
-First, run the development server:
+---
 
+## 🔑 Default Login Credentials
+
+Upon database initialization or seeding, the following default accounts are created:
+
+| Role | Email | Password | Access Rights |
+| :--- | :--- | :--- | :--- |
+| **Pharmacy Owner (Admin)** | `admin@medtrack.com` | `admin123` | Full administrative access, audit trail export, system settings |
+| **Lead Pharmacist (Staff)** | `pharmacist@medtrack.com` | `pharmacist123` | Inventory management, sales, barcode scan stock-in |
+
+---
+
+## ⚡ Quick Start
+
+### 1. Install Dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configure Environment Variables
+Copy `.env.example` to `.env.local`:
+```bash
+cp .env.example .env.local
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Initialize & Seed Database
+Run the database seed CLI script to initialize schema and populate sample medicines, inventory batches, and default user accounts:
+```bash
+npm run db:seed
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Start Development Server
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## ☁️ Option B: Turso Cloud DB Setup Guide
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+MedTrack natively supports **Turso Cloud DB** (LibSQL), allowing cloud-hosted, multi-device, and serverless synchronization.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Step 1: Create a Turso Cloud Database
+1. Sign up or log in at [https://turso.tech](https://turso.tech) (or install the [Turso CLI](https://docs.turso.tech/cli/introduction)).
+2. Create a new database:
+   ```bash
+   turso db create medtrack-db
+   ```
 
-## Deploy on Vercel
+### Step 2: Get Your Database URL & Auth Token
+1. Get Database URL:
+   ```bash
+   turso db show medtrack-db --url
+   # Output: libsql://medtrack-db-yourusername.turso.io
+   ```
+2. Generate Database Auth Token:
+   ```bash
+   turso db tokens create medtrack-db
+   # Output: eyJhbGciOi...
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Step 3: Configure `.env.local`
+In `.env.local`, set:
+```env
+DATABASE_URL=libsql://medtrack-db-yourusername.turso.io
+DATABASE_AUTH_TOKEN=eyJhbGciOi...
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Step 4: Seed Turso Cloud DB
+Run the seed command to push tables and initial pharmacy records directly to your Turso Cloud database:
+```bash
+npm run db:seed
+```
+
+---
+
+## 📂 Option A: Local SQLite File (Zero Config Fallback)
+
+If `DATABASE_URL` is omitted, MedTrack automatically falls back to an embedded SQLite database stored locally in `medtrack.db`.
+
+---
+
+## 🚀 Deploying to Vercel
+
+1. Push your repository to GitHub.
+2. Import the project into Vercel.
+3. In Environment Variables, add:
+   - `NEXTAUTH_URL`: `https://your-app.vercel.app`
+   - `NEXTAUTH_SECRET`: your secret key
+   - `DATABASE_URL`: `libsql://medtrack-db-yourusername.turso.io`
+   - `DATABASE_AUTH_TOKEN`: `eyJhbGciOi...`
+4. Deploy!
+
+---
+
+## 📋 Available Commands
+
+- `npm run dev` — Start development server
+- `npm run build` — Build production application
+- `npm run start` — Run production server
+- `npm run db:seed` — Initialize schema & seed default data
+- `npm run lint` — Run ESLint check

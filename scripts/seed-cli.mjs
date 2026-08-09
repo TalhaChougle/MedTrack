@@ -1,17 +1,47 @@
+import fs from "fs";
+import path from "path";
+import { createClient } from "@libsql/client";
 import bcrypt from "bcryptjs";
-import { client } from "./index";
 
-export async function initDatabase() {
+// Load .env.local if present
+const envPath = path.join(process.cwd(), ".env.local");
+if (fs.existsSync(envPath)) {
+  const envText = fs.readFileSync(envPath, "utf8");
+  for (const line of envText.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith("#")) {
+      const idx = trimmed.indexOf("=");
+      if (idx > 0) {
+        const key = trimmed.slice(0, idx).trim();
+        const val = trimmed.slice(idx + 1).trim();
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  }
+}
+
+const dbUrl = process.env.DATABASE_URL || "file:medtrack.db";
+const authToken = process.env.DATABASE_AUTH_TOKEN || undefined;
+
+console.log(`🔌 Connecting to Database: ${dbUrl.startsWith("libsql://") ? "Turso Cloud DB (" + dbUrl + ")" : "Local SQLite (" + dbUrl + ")"}`);
+
+const client = createClient({
+  url: dbUrl,
+  ...(authToken ? { authToken } : {}),
+});
+
+async function main() {
   try {
-    // Enable WAL mode & foreign keys for local SQLite (safely catch if Turso ignores WAL)
+    console.log("🌱 Initializing schema and seeding default credentials...");
     try {
       await client.execute("PRAGMA journal_mode = WAL;");
       await client.execute("PRAGMA foreign_keys = ON;");
-    } catch {
-      // Turso cloud ignores local WAL pragma
-    }
+    } catch {}
 
-    const defaultAdminHash = bcrypt.hashSync("admin123", 10);
+    const adminHash = bcrypt.hashSync("admin123", 10);
+    const staffHash = bcrypt.hashSync("pharmacist123", 10);
 
     await client.batch([
       `CREATE TABLE IF NOT EXISTS shops (
@@ -92,22 +122,24 @@ export async function initDatabase() {
         last_scanned_time INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL
       );`,
-      `CREATE INDEX IF NOT EXISTS idx_users_shop ON users(shop_id);`,
-      `CREATE INDEX IF NOT EXISTS idx_medicines_shop ON medicines(shop_id);`,
-      `CREATE INDEX IF NOT EXISTS idx_medicines_barcode ON medicines(shop_id, barcode);`,
-      `CREATE INDEX IF NOT EXISTS idx_batches_shop ON batches(shop_id);`,
-      `CREATE INDEX IF NOT EXISTS idx_batches_expiry ON batches(medicine_id, expiry_date);`,
-      `CREATE INDEX IF NOT EXISTS idx_audit_shop ON audit_logs(shop_id);`,
       `INSERT OR IGNORE INTO shops (id, name, address, phone) VALUES (1, 'Apex MedTrack Pharmacy', '123 Health Ave', '+1-800-555-MEDS');`,
       {
-        sql: `INSERT OR IGNORE INTO users (id, shop_id, name, email, password_hash, role) VALUES (1, 1, 'Pharmacy Admin', 'admin@medtrack.com', ?, 'owner');`,
-        args: [defaultAdminHash],
+        sql: `INSERT OR IGNORE INTO users (id, shop_id, name, email, password_hash, role) VALUES (1, 1, 'Pharmacy Owner Admin', 'admin@medtrack.com', ?, 'owner');`,
+        args: [adminHash],
+      },
+      {
+        sql: `INSERT OR IGNORE INTO users (id, shop_id, name, email, password_hash, role) VALUES (2, 1, 'Lead Pharmacist', 'pharmacist@medtrack.com', ?, 'pharmacist');`,
+        args: [staffHash],
       }
     ], "write");
 
-    return { success: true, message: "Database schema initialized successfully." };
-  } catch (err: unknown) {
-    console.error("Database initialization error:", err);
-    throw err;
+    console.log("✨ Database schema & authentication records successfully ready!");
+    console.log("🔑 Default Owner Login: admin@medtrack.com / admin123");
+    console.log("🔑 Default Staff Login: pharmacist@medtrack.com / pharmacist123");
+  } catch (err) {
+    console.error("❌ Seed CLI Error:", err);
+    process.exit(1);
   }
 }
+
+main();
