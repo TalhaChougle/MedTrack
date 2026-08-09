@@ -617,8 +617,8 @@ export default function BarcodeScannerModal({
   }, [inputSource]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-white border border-slate-200 text-slate-800 rounded-2xl sm:rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[92vh] flex flex-col my-auto min-w-0">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-white border-0 sm:border border-slate-200 text-slate-800 rounded-none sm:rounded-3xl w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-xl shadow-2xl overflow-hidden flex flex-col my-auto min-w-0">
         {/* Header */}
         <div className="flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4 border-b border-slate-200 bg-slate-50 shrink-0 min-w-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 overflow-hidden">
@@ -1207,8 +1207,8 @@ export default function BarcodeScannerModal({
 
       {/* Dedicated Stock In Details Popup Modal */}
       {stockInMedicine && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl w-[95vw] sm:w-full max-w-lg p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-2xl overflow-y-auto max-h-[92vh]">
+        <div className="fixed inset-0 z-[60] bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white border-0 sm:border border-slate-200 rounded-none sm:rounded-3xl w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-lg p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-2xl overflow-y-auto min-w-0">
             <div className="flex items-center justify-between border-b border-slate-200 pb-4">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200">

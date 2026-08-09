@@ -152,77 +152,94 @@ function RemoteScanClient() {
     };
   }, []);
 
-  // Camera scanner init
-  useEffect(() => {
-    if (!sessionId || !paired) return;
+  const [cameraState, setCameraState] = useState<"idle" | "starting" | "active" | "error">("idle");
+  const [cameraPermissionError, setCameraPermissionError] = useState<string | null>(null);
 
-    let isMounted = true;
-
-    const startCamera = async () => {
+  const stopCamera = async () => {
+    if (html5QrcodeRef.current && isScanningRef.current) {
+      isScanningRef.current = false;
       try {
-        const container = document.getElementById("mobile-reader");
-        if (container) container.innerHTML = "";
+        await html5QrcodeRef.current.stop();
+      } catch (e) {}
+      html5QrcodeRef.current = null;
+    }
+  };
 
-        const html5Qrcode = new Html5Qrcode("mobile-reader");
-        html5QrcodeRef.current = html5Qrcode;
+  const startCamera = async () => {
+    setCameraPermissionError(null);
+    setCameraState("starting");
 
-        const config = {
-          fps: 20,
-          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
-            width: Math.min(viewfinderWidth - 10, Math.floor(viewfinderWidth * 0.92)),
-            height: Math.min(viewfinderHeight - 10, Math.floor(viewfinderHeight * 0.65)),
-          }),
-        };
+    try {
+      await stopCamera();
 
+      const container = document.getElementById("mobile-reader");
+      if (container) container.innerHTML = "";
+
+      const html5Qrcode = new Html5Qrcode("mobile-reader");
+      html5QrcodeRef.current = html5Qrcode;
+
+      const config = {
+        fps: 25,
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
+          width: Math.min(viewfinderWidth - 10, Math.floor(viewfinderWidth * 0.90)),
+          height: Math.min(viewfinderHeight - 10, Math.floor(viewfinderHeight * 0.65)),
+        }),
+      };
+
+      try {
+        await html5Qrcode.start(
+          { facingMode: "environment" },
+          config,
+          (txt) => handlePhoneScan(txt),
+          () => {}
+        );
+        isScanningRef.current = true;
+        setCameraState("active");
+        return;
+      } catch (firstErr) {
         const cameras = await Html5Qrcode.getCameras().catch(() => []);
-        if (!isMounted) return;
-
         if (cameras && cameras.length > 0) {
           const backCam = cameras.find(
             (c) =>
               c.label.toLowerCase().includes("back") ||
               c.label.toLowerCase().includes("rear") ||
-              c.label.toLowerCase().includes("environment")
+              c.label.toLowerCase().includes("environment") ||
+              c.label.toLowerCase().includes("0")
           );
-          const camId = backCam ? backCam.id : cameras[0].id;
-          await html5Qrcode
-            .start(
-              camId,
-              config,
-              (txt) => handlePhoneScan(txt),
-              () => {}
-            )
-            .catch(() => {});
-          if (isMounted) isScanningRef.current = true;
-        } else {
-          await html5Qrcode
-            .start(
-              { facingMode: "environment" },
-              config,
-              (txt) => handlePhoneScan(txt),
-              () => {}
-            )
-            .catch(() => {});
-          if (isMounted) isScanningRef.current = true;
+          const camId = backCam ? backCam.id : cameras[cameras.length - 1].id;
+          await html5Qrcode.start(
+            camId,
+            config,
+            (txt) => handlePhoneScan(txt),
+            () => {}
+          );
+          isScanningRef.current = true;
+          setCameraState("active");
+          return;
         }
-      } catch (e) {
-        console.warn("Mobile camera init error:", e);
+        throw firstErr;
       }
-    };
+    } catch (e: any) {
+      console.warn("Mobile camera init error:", e);
+      isScanningRef.current = false;
+      setCameraState("error");
+      setCameraPermissionError("Camera permission needed. Tap the button below to allow camera access & open your rear camera.");
+    }
+  };
 
+  // Camera scanner init
+  useEffect(() => {
+    if (!sessionId || !paired) return;
+
+    let isMounted = true;
     const timer = setTimeout(() => {
-      startCamera();
-    }, 200);
+      if (isMounted) startCamera();
+    }, 250);
 
     return () => {
       isMounted = false;
       clearTimeout(timer);
-      if (html5QrcodeRef.current) {
-        const instance = html5QrcodeRef.current;
-        html5QrcodeRef.current = null;
-        isScanningRef.current = false;
-        instance.stop().catch(() => {});
-      }
+      stopCamera();
     };
   }, [sessionId, paired]);
 
@@ -261,6 +278,21 @@ function RemoteScanClient() {
       <div className="flex-1 my-3 flex flex-col justify-center items-center">
         <div className="w-full aspect-[4/3] max-h-[480px] rounded-3xl overflow-hidden bg-black border-2 border-teal-500/40 relative shadow-2xl flex items-center justify-center">
           <div id="mobile-reader" className="w-full h-full object-cover text-slate-200"></div>
+
+          {cameraState === "error" && (
+            <div className="absolute inset-0 bg-slate-950/95 p-4 flex flex-col items-center justify-center text-center space-y-3">
+              <AlertTriangle className="w-8 h-8 text-amber-400" />
+              <p className="text-xs text-slate-200 font-bold max-w-xs">{cameraPermissionError}</p>
+              <button
+                type="button"
+                onClick={() => startCamera()}
+                className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold rounded-xl shadow-lg cursor-pointer flex items-center gap-2 active:scale-95 transition-transform"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>Allow & Start Rear Camera</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Static Dedicated Status Box (Never overlaps camera or jumps) */}
