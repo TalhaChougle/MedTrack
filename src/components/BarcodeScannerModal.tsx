@@ -961,16 +961,41 @@ export default function BarcodeScannerModal({
                   </select>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      </div>
 
-              {stockInMedicine && (
-                <form onSubmit={handleStockInSubmit} className="space-y-4">
-                  <div className="p-3.5 rounded-2xl bg-teal-50 border border-teal-200 space-y-1.5 text-xs">
+      {/* Dedicated Stock In Details Popup Modal */}
+      {stockInMedicine && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-lg p-6 space-y-5 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200">
+                  <Boxes className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-extrabold text-[#1E3A5F]">Enter Stock Batch Details</h3>
+                  <p className="text-xs text-slate-500 font-medium font-mono">
+                    Scanned Barcode: {stockInMedicine.barcode || "Manual Non-Barcoded"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStockInMedicine(null)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleStockInSubmit} className="space-y-4">
+              <div className="p-3.5 rounded-2xl bg-teal-50 border border-teal-200 space-y-1.5 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-teal-800 bg-teal-100 px-2 py-0.5 rounded border border-teal-200">
-                    {stockInMedicine.isNew ? "✨ New Medicine Entry" : "✓ Auto-Filled From Existing Stock"}
-                  </span>
-                  <span className="text-slate-600 text-[11px] font-mono font-bold">
-                    Barcode: {stockInMedicine.barcode || "Manual Non-Barcoded"}
+                    {stockInMedicine.isNew ? "✨ New Medicine Entry" : "✓ Existing Stock Medicine"}
                   </span>
                 </div>
                 <div>
@@ -986,7 +1011,7 @@ export default function BarcodeScannerModal({
                             setNewMedicineName(val);
                             setNewMedicineSchedule(autoClassifySchedule(val));
                           }}
-                          placeholder="e.g. Paracetamol 500mg, Amoxicillin, Cefixime..."
+                          placeholder="e.g. Paracetamol 500mg, Amoxicillin..."
                           required
                           className="w-full bg-white border border-teal-300 rounded-lg px-3 py-1.5 text-slate-800 font-bold text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
                         />
@@ -1006,35 +1031,24 @@ export default function BarcodeScannerModal({
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-extrabold text-[#1E3A5F] text-base">{stockInMedicine.name}</p>
-                        <p className="text-slate-500 text-[11px] font-medium">
-                          Manufacturer: {stockInMedicine.manufacturer} • Schedule {stockInMedicine.schedule}
-                        </p>
-                      </div>
-                      <span className="text-[10px] text-teal-800 font-bold bg-white px-2 py-1 rounded border border-teal-300">
-                        Details Pre-Filled
-                      </span>
+                    <div>
+                      <p className="font-extrabold text-[#1E3A5F] text-base">{stockInMedicine.name}</p>
+                      <p className="text-slate-500 text-[11px] font-medium">
+                        Manufacturer: {stockInMedicine.manufacturer} • Schedule {stockInMedicine.schedule}
+                      </p>
                     </div>
                   )}
                 </div>
               </div>
 
-              {!stockInMedicine.isNew && (
-                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
-                  ℹ️ Medicine details are auto-filled. Only enter Batch Number, Price, Expiry Date, and Quantity manually for this batch.
-                </div>
-              )}
-
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="block text-slate-700 mb-1 font-bold">1. Batch Number * (Manual)</label>
+                  <label className="block text-slate-700 mb-1 font-bold">1. Batch Number *</label>
                   <input
                     type="text"
                     value={batchNumber}
                     onChange={(e) => setBatchNumber(e.target.value)}
-                    placeholder="e.g. BATCH-004"
+                    placeholder="e.g. BATCH-001"
                     required
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-mono font-bold focus:border-teal-600"
                   />
@@ -1050,12 +1064,13 @@ export default function BarcodeScannerModal({
                     placeholder="Enter units e.g. 50"
                     min="1"
                     required
-                    className="w-full bg-white border-2 border-teal-400 rounded-xl px-3 py-2 text-slate-900 focus:border-teal-600 font-extrabold shadow-2xs"
+                    autoFocus
+                    className="w-full bg-white border-2 border-teal-500 rounded-xl px-3 py-2 text-slate-900 focus:border-teal-600 font-extrabold shadow-xs"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 mb-1 font-bold">3. Expiry Date * (Manual)</label>
+                  <label className="block text-slate-700 mb-1 font-bold">3. Expiry Date *</label>
                   <input
                     type="date"
                     value={expiryDate}
@@ -1066,7 +1081,7 @@ export default function BarcodeScannerModal({
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 mb-1 font-bold">4. Supplier Name * (Can Vary)</label>
+                  <label className="block text-slate-700 mb-1 font-bold">4. Supplier Name *</label>
                   <input
                     type="text"
                     list="scanner-supplier-list"
@@ -1087,7 +1102,7 @@ export default function BarcodeScannerModal({
               </div>
 
               <div>
-                <label className="block text-slate-700 mb-1 font-bold text-xs">5. Cost Price Per Unit (₹) (Manual)</label>
+                <label className="block text-slate-700 mb-1 font-bold text-xs">5. Cost Price Per Unit (₹)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1098,20 +1113,27 @@ export default function BarcodeScannerModal({
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-50"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>Complete Stock In & Save Batch</span>
-              </button>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStockInMedicine(null)}
+                  className="w-1/3 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-2/3 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>{loading ? "Saving..." : "Complete Stock In & Save"}</span>
+                </button>
+              </div>
             </form>
-          )}
+          </div>
         </div>
       )}
-        </div>
-      </div>
     </div>
   );
 }
