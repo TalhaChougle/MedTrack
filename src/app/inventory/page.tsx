@@ -417,6 +417,7 @@ export default function InventoryPage() {
                       </button>
                     </div>
                   </div>
+                </div>
 
                 {/* Expanded Batches Drawer */}
                 {isExpanded && (
@@ -744,6 +745,9 @@ export default function InventoryPage() {
               </button>
             </form>
           </div>
+        </div>
+      )}
+
       {/* Modal: Delete Medicine Confirmation */}
       {deleteConfirmMed && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
