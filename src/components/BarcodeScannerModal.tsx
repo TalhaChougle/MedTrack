@@ -139,9 +139,107 @@ export default function BarcodeScannerModal({
     }
   }, [inputSource]);
 
-  // Direct Device Camera Scanner Engine
+  // Direct Device Camera Scanner Engine (Rear/Back Camera Auto-Start)
   const cameraScannerRef = useRef<Html5Qrcode | null>(null);
   const cameraActiveRef = useRef<boolean>(false);
+  const [cameraPermissionError, setCameraPermissionError] = useState<string | null>(null);
+
+  const startCameraScanner = async () => {
+    setCameraPermissionError(null);
+    try {
+      const container = document.getElementById("direct-device-camera-reader");
+      if (container) container.innerHTML = "";
+
+      // 1. Explicitly request camera permission to trigger browser prompt on mobile
+      try {
+        if (typeof navigator !== "undefined" && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+          stream.getTracks().forEach((track) => track.stop());
+        }
+      } catch (permErr: any) {
+        if (permErr?.name === "NotAllowedError" || permErr?.name === "PermissionDeniedError") {
+          setCameraPermissionError("Camera permission denied. Please allow camera access in your browser settings to scan barcodes.");
+          return;
+        }
+      }
+
+      const html5Qrcode = new Html5Qrcode("direct-device-camera-reader");
+      cameraScannerRef.current = html5Qrcode;
+
+      const config = {
+        fps: 25,
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
+          width: Math.min(viewfinderWidth - 10, Math.floor(viewfinderWidth * 0.88)),
+          height: Math.min(viewfinderHeight - 10, Math.floor(viewfinderHeight * 0.65)),
+        }),
+      };
+
+      const cameras = await Html5Qrcode.getCameras().catch(() => []);
+
+      if (cameras && cameras.length > 0) {
+        const backCam = cameras.find(
+          (c) =>
+            c.label.toLowerCase().includes("back") ||
+            c.label.toLowerCase().includes("rear") ||
+            c.label.toLowerCase().includes("environment") ||
+            c.label.toLowerCase().includes("0")
+        );
+        const camId = backCam ? backCam.id : cameras[cameras.length - 1].id;
+        await html5Qrcode
+          .start(
+            camId,
+            config,
+            (scannedText) => {
+              if (scannedText) {
+                if (typeof window !== "undefined" && "vibrate" in navigator) {
+                  try { navigator.vibrate(100); } catch (e) {}
+                }
+                handleBarcodeScanned(scannedText);
+              }
+            },
+            () => {}
+          )
+          .catch(async () => {
+            await html5Qrcode.start(
+              { facingMode: "environment" },
+              config,
+              (scannedText) => {
+                if (scannedText) {
+                  if (typeof window !== "undefined" && "vibrate" in navigator) {
+                    try { navigator.vibrate(100); } catch (e) {}
+                  }
+                  handleBarcodeScanned(scannedText);
+                }
+              },
+              () => {}
+            ).catch(() => {});
+          });
+        cameraActiveRef.current = true;
+      } else {
+        await html5Qrcode
+          .start(
+            { facingMode: "environment" },
+            config,
+            (scannedText) => {
+              if (scannedText) {
+                if (typeof window !== "undefined" && "vibrate" in navigator) {
+                  try { navigator.vibrate(100); } catch (e) {}
+                }
+                handleBarcodeScanned(scannedText);
+              }
+            },
+            () => {}
+          )
+          .catch((e: any) => {
+            setCameraPermissionError(e?.message || "Failed to start camera scanner.");
+          });
+        cameraActiveRef.current = true;
+      }
+    } catch (err: any) {
+      console.warn("Direct camera scanner init warning:", err);
+      setCameraPermissionError(err?.message || "Camera access error.");
+    }
+  };
 
   useEffect(() => {
     if (inputSource !== "camera") {
@@ -158,74 +256,8 @@ export default function BarcodeScannerModal({
     }
 
     let isMounted = true;
-    const startCameraScanner = async () => {
-      try {
-        const container = document.getElementById("direct-device-camera-reader");
-        if (container) container.innerHTML = "";
-
-        const html5Qrcode = new Html5Qrcode("direct-device-camera-reader");
-        cameraScannerRef.current = html5Qrcode;
-
-        const config = {
-          fps: 20,
-          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
-            width: Math.min(viewfinderWidth - 10, Math.floor(viewfinderWidth * 0.90)),
-            height: Math.min(viewfinderHeight - 10, Math.floor(viewfinderHeight * 0.60)),
-          }),
-        };
-
-        const cameras = await Html5Qrcode.getCameras().catch(() => []);
-        if (!isMounted) return;
-
-        if (cameras && cameras.length > 0) {
-          const backCam = cameras.find(
-            (c) =>
-              c.label.toLowerCase().includes("back") ||
-              c.label.toLowerCase().includes("rear") ||
-              c.label.toLowerCase().includes("environment")
-          );
-          const camId = backCam ? backCam.id : cameras[0].id;
-          await html5Qrcode
-            .start(
-              camId,
-              config,
-              (scannedText) => {
-                if (scannedText) {
-                  if (typeof window !== "undefined" && "vibrate" in navigator) {
-                    try { navigator.vibrate(100); } catch (e) {}
-                  }
-                  handleBarcodeScanned(scannedText);
-                }
-              },
-              () => {}
-            )
-            .catch(() => {});
-          if (isMounted) cameraActiveRef.current = true;
-        } else {
-          await html5Qrcode
-            .start(
-              { facingMode: "environment" },
-              config,
-              (scannedText) => {
-                if (scannedText) {
-                  if (typeof window !== "undefined" && "vibrate" in navigator) {
-                    try { navigator.vibrate(100); } catch (e) {}
-                  }
-                  handleBarcodeScanned(scannedText);
-                }
-              },
-              () => {}
-            )
-            .catch(() => {});
-          if (isMounted) cameraActiveRef.current = true;
-        }
-      } catch (err) {
-        console.warn("Direct camera scanner init warning:", err);
-      }
-    };
-
     const timer = setTimeout(() => {
-      startCameraScanner();
+      if (isMounted) startCameraScanner();
     }, 200);
 
     return () => {
@@ -607,8 +639,8 @@ export default function BarcodeScannerModal({
   }, [inputSource]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white border border-slate-200 text-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col my-auto">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white border border-slate-200 text-slate-800 rounded-2xl sm:rounded-3xl w-[95vw] sm:w-full max-w-xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col my-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50 shrink-0">
           <div className="flex items-center gap-3">
@@ -795,22 +827,43 @@ export default function BarcodeScannerModal({
 
           {/* Device Option 0: Direct Device Camera Scanner */}
           {inputSource === "camera" && (
-            <div className="p-4 rounded-3xl bg-[#0F172A] border border-slate-800 text-white space-y-3 shadow-2xl">
+            <div className="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-[#0F172A] border border-slate-800 text-white space-y-3 shadow-2xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                  <span className="text-xs font-bold text-emerald-400">Live Device Camera Active</span>
+                  <span className="text-xs font-bold text-emerald-400">Rear Camera Active</span>
                 </div>
                 <span className="text-[10px] text-slate-400 font-medium">Point camera at medicine barcode</span>
               </div>
 
               <div className="relative rounded-2xl overflow-hidden bg-black aspect-4/3 flex items-center justify-center border border-slate-700 shadow-inner">
                 <div id="direct-device-camera-reader" className="w-full h-full" />
+
+                {cameraPermissionError && (
+                  <div className="absolute inset-0 bg-slate-900/95 p-4 flex flex-col items-center justify-center text-center space-y-3">
+                    <AlertTriangle className="w-8 h-8 text-amber-400" />
+                    <p className="text-xs text-slate-200 font-bold max-w-xs">{cameraPermissionError}</p>
+                    <button
+                      type="button"
+                      onClick={() => startCameraScanner()}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>Allow & Start Rear Camera</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
                 <span>⚡ Auto-detects 1D, EAN-13, GS1 & 2D barcodes</span>
-                <span className="text-emerald-400 font-bold">Touchless Instant Scan</span>
+                <button
+                  type="button"
+                  onClick={() => startCameraScanner()}
+                  className="text-emerald-400 font-bold text-[10px] underline cursor-pointer"
+                >
+                  Restart Camera
+                </button>
               </div>
             </div>
           )}
@@ -1137,8 +1190,8 @@ export default function BarcodeScannerModal({
             <div id="stock-in-form-container" className="space-y-3 pt-2 border-t border-slate-200">
               {/* Select Existing Stock Medicine Dropdown */}
               {existingMeds.length > 0 && (
-                <div className="p-3 rounded-2xl bg-white border border-teal-200 space-y-1.5 text-xs shadow-2xs">
-                  <label className="block text-[#1E3A5F] font-extrabold text-xs">
+                <div className="p-3 rounded-2xl bg-white border border-teal-200 space-y-1.5 text-xs shadow-2xs w-full max-w-full overflow-hidden shrink min-w-0">
+                  <label className="block text-[#1E3A5F] font-extrabold text-xs leading-tight">
                     Choose Existing Medicine from Stock (Auto-Fills All Details):
                   </label>
                   <select
@@ -1158,12 +1211,12 @@ export default function BarcodeScannerModal({
                         });
                       }
                     }}
-                    className="w-full bg-slate-50 border border-teal-300 rounded-xl px-3 py-2 text-slate-800 font-bold text-xs focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                    className="w-full max-w-full bg-slate-50 border border-teal-300 rounded-xl px-2.5 py-2 text-slate-800 font-bold text-xs focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer text-ellipsis overflow-hidden shrink min-w-0"
                   >
-                    <option value="">-- Or Choose Stock Medicine to Add Batch --</option>
+                    <option value="">-- Choose Stock Medicine to Add Batch --</option>
                     {existingMeds.map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.name} • {m.manufacturer} (Schedule {m.schedule})
+                        {m.name} ({m.schedule}) • {m.totalStock || 0} Units
                       </option>
                     ))}
                   </select>
@@ -1176,8 +1229,8 @@ export default function BarcodeScannerModal({
 
       {/* Dedicated Stock In Details Popup Modal */}
       {stockInMedicine && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-lg p-6 space-y-5 shadow-2xl overflow-y-auto max-h-[90vh]">
+        <div className="fixed inset-0 z-[60] bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl w-[95vw] sm:w-full max-w-lg p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-2xl overflow-y-auto max-h-[92vh]">
             <div className="flex items-center justify-between border-b border-slate-200 pb-4">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200">
