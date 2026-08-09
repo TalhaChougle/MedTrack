@@ -169,11 +169,16 @@ export default function BarcodeScannerModal({
       cameraScannerRef.current = html5Qrcode;
 
       const config = {
-        fps: 25,
+        fps: 30,
         qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
           width: Math.min(viewfinderWidth - 10, Math.floor(viewfinderWidth * 0.88)),
           height: Math.min(viewfinderHeight - 10, Math.floor(viewfinderHeight * 0.65)),
         }),
+        videoConstraints: {
+          facingMode: "environment",
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
+        },
       };
 
       // Direct back/environment facing camera request
@@ -262,17 +267,9 @@ export default function BarcodeScannerModal({
   useEffect(() => {
     if (inputSource !== "camera") {
       stopCameraScanner();
-      return;
     }
 
-    let isMounted = true;
-    const timer = setTimeout(() => {
-      if (isMounted) startCameraScanner();
-    }, 300);
-
     return () => {
-      isMounted = false;
-      clearTimeout(timer);
       stopCameraScanner();
     };
   }, [inputSource, mode]);
@@ -354,11 +351,27 @@ export default function BarcodeScannerModal({
     return { barcode: clean };
   };
 
+  function isValidEAN13(code: string): boolean {
+    if (!/^\d{13}$/.test(code)) return true;
+    const digits = code.split("").map(Number);
+    const checkDigit = digits.pop()!;
+    const sum = digits.reduce((acc, digit, idx) => {
+      return acc + digit * (idx % 2 === 0 ? 1 : 3);
+    }, 0);
+    const calculatedCheck = (10 - (sum % 10)) % 10;
+    return checkDigit === calculatedCheck;
+  }
+
   // Barcode scanned event handler with GS1 Batch/Expiry parsing
   const handleBarcodeScanned = async (scannedCode: string) => {
     const parsed = parsePharmaceuticalBarcode(scannedCode);
     const code = parsed.barcode || scannedCode.trim();
     if (!code || loading) return;
+
+    // Filter out invalid EAN-13 checksum misreads
+    if (/^\d{13}$/.test(code) && !isValidEAN13(code)) {
+      return;
+    }
 
     if (
       lastScannedCodeRef.current === code &&

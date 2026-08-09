@@ -65,10 +65,26 @@ function RemoteScanClient() {
   const lastScannedRef = useRef<string>("");
   const isSendingRef = useRef<boolean>(false);
 
+  function isValidEAN13(code: string): boolean {
+    if (!/^\d{13}$/.test(code)) return true;
+    const digits = code.split("").map(Number);
+    const checkDigit = digits.pop()!;
+    const sum = digits.reduce((acc, digit, idx) => {
+      return acc + digit * (idx % 2 === 0 ? 1 : 3);
+    }, 0);
+    const calculatedCheck = (10 - (sum % 10)) % 10;
+    return checkDigit === calculatedCheck;
+  }
+
   // Handle barcode scanned on phone
   const handlePhoneScan = async (code: string) => {
     const cleanCode = code.trim();
     if (!cleanCode || !sessionId || isSendingRef.current) return;
+
+    // Filter out invalid EAN-13 checksum misreads
+    if (/^\d{13}$/.test(cleanCode) && !isValidEAN13(cleanCode)) {
+      return;
+    }
 
     if (Date.now() - lastTimeRef.current < 1200 && lastScannedRef.current === cleanCode) {
       return;
@@ -176,11 +192,16 @@ function RemoteScanClient() {
       html5QrcodeRef.current = html5Qrcode;
 
       const config = {
-        fps: 25,
+        fps: 30,
         qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
           width: Math.min(viewfinderWidth - 10, Math.floor(viewfinderWidth * 0.90)),
           height: Math.min(viewfinderHeight - 10, Math.floor(viewfinderHeight * 0.65)),
         }),
+        videoConstraints: {
+          facingMode: "environment",
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
+        },
       };
 
       try {
@@ -248,21 +269,12 @@ function RemoteScanClient() {
     }
   };
 
-  // Camera scanner init
+  // Clean up camera on unmount (Do NOT auto-start on load; require user click)
   useEffect(() => {
-    if (!sessionId || !paired) return;
-
-    let isMounted = true;
-    const timer = setTimeout(() => {
-      if (isMounted) startCamera();
-    }, 300);
-
     return () => {
-      isMounted = false;
-      clearTimeout(timer);
       stopCamera();
     };
-  }, [sessionId, paired]);
+  }, []);
 
   return (
     <div className="min-h-screen w-full bg-slate-900 text-white flex flex-col justify-between p-3 sm:p-4 font-sans select-none overflow-x-hidden">
