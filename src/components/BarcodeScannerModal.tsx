@@ -235,6 +235,30 @@ export default function BarcodeScannerModal({
     }
   };
 
+  const requestCameraPermissionAndStart = async () => {
+    setCameraPermissionError(null);
+    setCameraState("starting");
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+          stream.getTracks().forEach((track) => track.stop());
+        } catch (permErr: any) {
+          if (permErr?.name === "NotAllowedError" || permErr?.name === "PermissionDeniedError") {
+            setCameraState("error");
+            setCameraPermissionError("Camera permission denied in browser settings. Please allow camera access to scan barcodes.");
+            return;
+          }
+        }
+      }
+      await startCameraScanner();
+    } catch (err: any) {
+      setCameraState("error");
+      setCameraPermissionError(err?.message || "Failed to start camera scanner.");
+    }
+  };
+
   useEffect(() => {
     if (inputSource !== "camera") {
       stopCameraScanner();
@@ -244,7 +268,7 @@ export default function BarcodeScannerModal({
     let isMounted = true;
     const timer = setTimeout(() => {
       if (isMounted) startCameraScanner();
-    }, 250);
+    }, 300);
 
     return () => {
       isMounted = false;
@@ -829,17 +853,24 @@ export default function BarcodeScannerModal({
               <div className="relative rounded-2xl overflow-hidden bg-black aspect-4/3 flex items-center justify-center border border-slate-700 shadow-inner">
                 <div id="direct-device-camera-reader" className="w-full h-full" />
 
-                {cameraPermissionError && (
+                {cameraState !== "active" && (
                   <div className="absolute inset-0 bg-slate-900/95 p-4 flex flex-col items-center justify-center text-center space-y-3">
-                    <AlertTriangle className="w-8 h-8 text-amber-400" />
-                    <p className="text-xs text-slate-200 font-bold max-w-xs">{cameraPermissionError}</p>
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                      <Camera className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-extrabold text-white">Enable Camera Scanner</h4>
+                      <p className="text-[11px] text-slate-300 font-medium max-w-xs">
+                        {cameraPermissionError || "Tap button below to allow camera permission & open your rear camera."}
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => startCameraScanner()}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                      onClick={() => requestCameraPermissionAndStart()}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl shadow-lg cursor-pointer flex items-center gap-1.5 active:scale-95 transition-transform"
                     >
                       <Camera className="w-4 h-4" />
-                      <span>Allow & Start Rear Camera</span>
+                      <span>📷 Allow & Start Rear Camera</span>
                     </button>
                   </div>
                 )}

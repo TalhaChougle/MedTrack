@@ -166,9 +166,6 @@ function RemoteScanClient() {
   };
 
   const startCamera = async () => {
-    setCameraPermissionError(null);
-    setCameraState("starting");
-
     try {
       await stopCamera();
 
@@ -223,7 +220,31 @@ function RemoteScanClient() {
       console.warn("Mobile camera init error:", e);
       isScanningRef.current = false;
       setCameraState("error");
-      setCameraPermissionError("Camera permission needed. Tap the button below to allow camera access & open your rear camera.");
+      setCameraPermissionError("Camera permission needed. Tap the button below to allow camera access & open rear camera.");
+    }
+  };
+
+  const requestCameraPermissionAndStart = async () => {
+    setCameraPermissionError(null);
+    setCameraState("starting");
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+          stream.getTracks().forEach((track) => track.stop());
+        } catch (permErr: any) {
+          if (permErr?.name === "NotAllowedError" || permErr?.name === "PermissionDeniedError") {
+            setCameraState("error");
+            setCameraPermissionError("Camera permission denied in browser settings. Please allow camera access to scan barcodes.");
+            return;
+          }
+        }
+      }
+      await startCamera();
+    } catch (err: any) {
+      setCameraState("error");
+      setCameraPermissionError(err?.message || "Failed to start camera. Please tap to retry.");
     }
   };
 
@@ -234,7 +255,7 @@ function RemoteScanClient() {
     let isMounted = true;
     const timer = setTimeout(() => {
       if (isMounted) startCamera();
-    }, 250);
+    }, 300);
 
     return () => {
       isMounted = false;
@@ -280,17 +301,24 @@ function RemoteScanClient() {
           <div className="w-full aspect-[4/3] max-h-[480px] rounded-3xl overflow-hidden bg-black border-2 border-teal-500/40 relative shadow-2xl flex items-center justify-center">
             <div id="mobile-reader" className="w-full h-full object-cover text-slate-200"></div>
 
-            {cameraState === "error" && (
+            {cameraState !== "active" && (
               <div className="absolute inset-0 bg-slate-950/95 p-4 flex flex-col items-center justify-center text-center space-y-3">
-                <AlertTriangle className="w-8 h-8 text-amber-400" />
-                <p className="text-xs text-slate-200 font-bold max-w-xs">{cameraPermissionError}</p>
+                <div className="w-12 h-12 rounded-2xl bg-teal-500/20 text-teal-400 flex items-center justify-center border border-teal-500/30">
+                  <Smartphone className="w-6 h-6 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-extrabold text-white">Enable Phone Camera Scanner</h3>
+                  <p className="text-[11px] text-slate-300 font-medium max-w-xs">
+                    {cameraPermissionError || "Tap button below to grant camera permission & open your rear camera."}
+                  </p>
+                </div>
                 <button
                   type="button"
-                  onClick={() => startCamera()}
-                  className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold rounded-xl shadow-lg cursor-pointer flex items-center gap-2 active:scale-95 transition-transform"
+                  onClick={() => requestCameraPermissionAndStart()}
+                  className="px-5 py-3 bg-teal-600 hover:bg-teal-500 text-white text-xs font-black rounded-2xl shadow-xl cursor-pointer flex items-center gap-2 active:scale-95 transition-transform"
                 >
                   <Smartphone className="w-4 h-4" />
-                  <span>Allow & Start Rear Camera</span>
+                  <span>📷 Allow Camera & Start Rear Scanner</span>
                 </button>
               </div>
             )}
