@@ -5,6 +5,7 @@ import { medicines, batches, auditLogs, shops, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { autoClassifySchedule } from "@/lib/scheduleClassifier";
 import { persistCurrentDatabaseState, syncAndRestoreDatabase } from "@/lib/db/storeSync";
+import { lookupBarcodeDetails } from "@/lib/barcodeLookup";
 
 function suggestNextBatchNumber(batchNumbers: string[]): string {
   let maxNum = 0;
@@ -46,16 +47,17 @@ export async function GET(req: Request) {
       );
 
     if (!med) {
+      const known = lookupBarcodeDetails(barcode);
       return NextResponse.json({
         isNew: true,
         medicine: {
           id: 0,
           barcode,
-          name: "",
-          manufacturer: "General Pharma",
+          name: known.name,
+          manufacturer: known.manufacturer,
           category: "General",
-          schedule: "OTC",
-          price: 0,
+          schedule: known.schedule,
+          price: known.unitPrice,
         },
         suggestedBatchNumber: "BATCH-001",
         existingBatchesCount: 0,

@@ -229,7 +229,9 @@ export default function BarcodeScannerModal({
             barcode: code,
             isNew: data.isNew,
           });
-          setNewMedicineName(data.medicine?.name || "");
+          const medName = data.medicine?.name || "";
+          setNewMedicineName(medName);
+          setNewMedicineSchedule(data.medicine?.schedule || autoClassifySchedule(medName));
           
           // Auto-fill extracted Batch Number or suggested batch number
           setBatchNumber(parsed.batchNumber || data.suggestedBatchNumber || "BATCH-001");
